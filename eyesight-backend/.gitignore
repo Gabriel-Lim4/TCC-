@@ -1,0 +1,16 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/src/generated/prisma
+
+
+#codigos que usa
+
+#npm install prisma@^5 @prisma/client@^5
+#npx prisma generate
+#npx prisma db pull -- lê o banco já criado (opcional)
+#npx prisma generate  -- gera o client
+# npm run dev
+
+#Set-ExecutionPolicy RemoteSigned -Scope CurrentUser p powershell
