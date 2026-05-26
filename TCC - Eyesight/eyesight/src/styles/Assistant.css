@@ -1,0 +1,233 @@
+/* página inteira */
+.ai-page {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  min-height: 100vh;
+  background: #050816;
+  color: white;
+  font-family: "Inter", sans-serif;
+}
+
+/* chat principal */
+.chat-container {
+  flex: 1;
+  background: #091224;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+
+/* header */
+.chat-header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+/* info assistente */
+.assistant-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.assistant-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff4fd8, #7b61ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.assistant-info h2 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.assistant-info p {
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+/* mensagens */
+.chat-messages {
+  flex: 1;
+  padding: 24px 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* mensagem */
+.message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* mensagem usuario */
+.message.user {
+  justify-content: flex-end;
+}
+
+/* icone */
+.message-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff4fd8, #7b61ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* bolha */
+.message-content {
+  max-width: 70%;
+  padding: 18px;
+  border-radius: 20px;
+  background: #111b2e;
+  line-height: 1.6;
+}
+
+/* usuario */
+.message.user .message-content {
+  background: linear-gradient(135deg, #3b82f6, #7c3aed);
+}
+
+/* input */
+.chat-input {
+  display: flex;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.chat-input input {
+  flex: 1;
+  background: #111b2e;
+  border: none;
+  outline: none;
+  border-radius: 16px;
+  padding: 18px;
+  color: white;
+  font-size: 15px;
+}
+
+.chat-input input::placeholder {
+  color: #9ca3af;
+}
+
+/* botão */
+.chat-input button {
+  border: none;
+  padding: 0 24px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #3b82f6, #7c3aed);
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.chat-input button:hover {
+  transform: scale(1.03);
+}
+
+/* painel direito */
+.right-panel {
+  width: 360px;
+}
+
+.right-panel h2 {
+  margin-bottom: 18px;
+  font-size: 24px;
+}
+
+/* cards */
+.action-card {
+  background: #091224;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  margin-bottom: 18px;
+  transition: 0.3s;
+}
+
+.action-card:hover {
+  transform: translateY(-4px);
+  border-color: #7c3aed;
+}
+
+/* icone card */
+.card-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: rgba(124,58,237,0.15);
+  color: #8b5cf6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* textos */
+.action-card h3 {
+  margin-bottom: 6px;
+  font-size: 17px;
+}
+
+.action-card p {
+  color: #9ca3af;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* conversas */
+.recent-conversations {
+  margin-top: 40px;
+}
+
+.conversation-card {
+  background: #091224;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 20px;
+}
+
+.conversation-card h4 {
+  margin-bottom: 8px;
+}
+
+.conversation-card p {
+  color: #9ca3af;
+  margin-bottom: 12px;
+}
+
+.conversation-card span {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* responsivo */
+@media (max-width: 1100px) {
+
+  .ai-page {
+    flex-direction: column;
+  }
+
+  .right-panel {
+    width: 100%;
+  }
+
+}
