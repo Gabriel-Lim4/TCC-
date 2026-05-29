@@ -1,15 +1,28 @@
-require('dotenv').config();
+// ─────────────────────────────────────────────────────────────
+// config/env.js
+//
+// Ponto central de configuração do projeto.
+// Todos os valores sensíveis vêm do .env — nunca hardcoded.
+//
+// "import 'dotenv/config'" é o equivalente ESM de:
+//   require('dotenv').config()
+// Ele lê o .env e injeta as variáveis em process.env.
+// Precisa ser importado ANTES de qualquer acesso a process.env,
+// por isso fica no primeiro arquivo carregado (server.js importa env.js).
+// ─────────────────────────────────────────────────────────────
 
-module.exports = {
-    app: {
-        port:    process.env.PORT     || 3333,
-        nodeEnv: process.env.NODE_ENV || 'development',
-    },
+import 'dotenv/config';
 
-    jwt: {
-        secret:    process.env.JWT_SECRET,
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-    },
+export default {
+  app: {
+    port:    process.env.PORT     || 3333,
+    nodeEnv: process.env.NODE_ENV || 'development',
+  },
 
-    databaseUrl: process.env.DATABASE_URL,
+  jwt: {
+    secret:    process.env.JWT_SECRET,
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  },
+
+  databaseUrl: process.env.DATABASE_URL,
 };

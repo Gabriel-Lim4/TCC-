@@ -3,24 +3,20 @@
   "version": "1.0.0",
   "description": "Backend do painel de métricas Eyesight",
   "main": "src/server.js",
+  "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "node --watch src/server.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "axios": "^1.16.1",
     "bcrypt": "^5.1.1",
-    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.9.7",
-    "prisma": "^5.22.0",
-    "tsx": "^4.21.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
+    "prisma": "^5.22.0"
   }
 }
