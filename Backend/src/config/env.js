@@ -25,4 +25,7 @@ export default {
   },
 
   databaseUrl: process.env.DATABASE_URL,
+  META_APP_ID=seu_app_id,//colcoar a chave
+META_APP_SECRET=seu_app_secret,//colcoar a chave
+META_REDIRECT_URI=https //seu-dominio.railway.app/meta/callback
 };
