@@ -1,0 +1,198 @@
+/* importação das fontes */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Tomorrow:wght@400;700&display=swap');
+
+/* reset geral */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  text-decoration: none;
+  list-style: none;
+}
+
+/* body */
+body {
+  font-family: 'Inter', sans-serif; /* fonte principal */
+  background: linear-gradient(180deg, #051836, #1a042e);
+  color: white;
+  overflow-x: hidden;
+}
+
+/* conteúdo principal */
+.dashboard-content {
+  flex: 1;
+  padding: 40px;
+  background: linear-gradient(180deg, #031127 0%, #120222 100%);
+  min-height: 100vh;
+}
+
+/* título principal */
+.dashboard-content h1 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  font-family: 'Tomorrow', sans-serif;
+}
+
+/* subtítulo */
+.subtitle {
+  color: #94a3b8;
+  margin-bottom: 40px;
+}
+
+/* grid dos cards principais */
+.cards-top {
+  display: grid;
+
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
+
+  gap: 20px;
+}
+
+/* card padrão */
+.card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 25px;
+  min-height: 140px;
+  transition: 0.3s;
+}
+
+/* hover */
+.card:hover {
+  transform: translateY(-5px);
+  border-color: #7c3aed;
+}
+
+/* texto do card */
+.card p {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+/* número do card */
+.card h2 {
+  font-size: 1.8rem;
+  font-family: 'Tomorrow', sans-serif;
+}
+
+/* títulos das seções */
+.section-title {
+  margin-top: 40px;
+  margin-bottom: 20px;
+  font-family: 'Tomorrow', sans-serif;
+}
+
+/* POSTS GRID */
+.posts-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(auto-fit, minmax(180px, 1fr));
+
+  gap: 20px;
+}
+
+/* card do post */
+.post-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 20px;
+  padding: 20px;
+  transition: 0.3s;
+}
+
+/* hover */
+.post-card:hover {
+  transform: translateY(-5px);
+  border-color: #7c3aed;
+}
+
+/* imagem fake */
+.post-image {
+  height: 140px;
+  border-radius: 14px;
+  background: #2a1247;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+}
+
+/* info do post */
+.post-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  color: #94a3b8;
+}
+
+/* STORIES E REELS */
+.analytics-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  margin-top: 30px;
+}
+
+/* card grande */
+.analytics-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 20px;
+  padding: 30px;
+  transition: 0.3s;
+}
+
+/* hover */
+.analytics-card:hover {
+  transform: translateY(-5px);
+  border-color: #7c3aed;
+}
+
+/* título */
+.analytics-card h2 {
+  margin-bottom: 30px;
+  font-family: 'Tomorrow', sans-serif;
+}
+
+/* grid interno */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 30px;
+}
+
+/* textos */
+.stats-grid p {
+  color: #94a3b8;
+  font-size: 14px;
+     font-family: 'Inter', sans-serif;
+}
+
+/* números */
+.stats-grid h1 {
+  font-size: 40px;
+  margin-top: 5px;
+   font-family: 'Inter', sans-serif;
+}
+
+/* RESPONSIVIDADE */
+@media (max-width: 768px) {
+
+  .dashboard-content {
+    padding: 20px;
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
