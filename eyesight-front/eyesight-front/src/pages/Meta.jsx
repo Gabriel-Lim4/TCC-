@@ -78,23 +78,16 @@ function Meta() {
   // Pede ao back a URL de autorização e redireciona o browser.
   // O userId é necessário para o back saber qual usuário
   // está autorizando no callback (que não tem JWT).
-  async function conectarMeta() {
-    setErro('');
-    try {
-      const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
-      const { data } = await api.get('/meta/conectar');
-
-      // Salva o state para segurança (CSRF)
-      sessionStorage.setItem('meta_oauth_state', data.state);
-
-      // Adiciona o userId como parâmetro extra na URL do Meta
-      // O back-end lê esse parâmetro no callback para identificar o usuário
-      const urlFinal = `${data.url}&userId=${usuario.id}`;
-      window.location.href = urlFinal;
-    } catch (err) {
-      setErro('Erro ao iniciar conexão com o Meta.');
-    }
+ async function conectarMeta() {
+  setErro('');
+  try {
+    const { data } = await api.get('/meta/conectar');
+    sessionStorage.setItem('meta_oauth_state', data.state);
+    window.location.href = data.url;
+  } catch (err) {
+    setErro('Erro ao iniciar conexão com o Meta.');
   }
+}
 
   // ── Remove conta vinculada ───────────────────────────────────
   async function desconectar() {
