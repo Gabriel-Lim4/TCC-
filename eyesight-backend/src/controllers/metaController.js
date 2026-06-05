@@ -11,7 +11,6 @@ import env              from '../config/env.js';
 import crypto           from 'crypto';
 
 // ── GET /meta/conectar ───────────────────────────────────────
-// Gera URL de autorização e state CSRF. Front redireciona o browser.
 export async function iniciarConexao(req, res) {
   try {
     const random = crypto.randomBytes(16).toString('hex');
@@ -28,30 +27,27 @@ export async function iniciarConexao(req, res) {
 }
 
 // ── GET /meta/callback ───────────────────────────────────────
-// Rota PÚBLICA — o Meta redireciona o browser aqui após autorização.
-// Não tem JWT: o userId vem como query param passado pelo front.
 export async function callback(req, res) {
-  const { code, error, userId } = req.query;
+  const { code, error, state } = req.query;
 
   if (error) {
     console.warn('[META] Usuário negou autorização:', error);
     return res.redirect(`${env.frontendUrl}/app/meta?meta=negado`);
   }
 
-  if (!code || !userId) {
+  // Extrai o userId do state: "123:randomhex"
+  const userId = state?.split(':')[0];
+
+  if (!code || !userId || isNaN(parseInt(userId))) {
+    console.warn('[META] state inválido:', state);
     return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
   }
 
   try {
-    // Troca code → token curto → token longo
-    const tokenCurto              = await metaService.trocarCodePorToken(code);
-    const { access_token }        = await metaService.trocarPorTokenLongo(tokenCurto.access_token);
+    const tokenCurto       = await metaService.trocarCodePorToken(code);
+    const { access_token } = await metaService.trocarPorTokenLongo(tokenCurto.access_token);
+    const adAccountId      = await metaService.buscarAdAccountId(access_token);
 
-    // Busca o Ad Account ID da conta de anúncios do usuário
-    const adAccountId             = await metaService.buscarAdAccountId(access_token);
-
-    // upsert: cria ou atualiza a conta vinculada
-    // @@unique([fk_id_usuario, plataforma]) no schema habilita isso
     await prisma.contas_vinculadas.upsert({
       where: {
         fk_id_usuario_plataforma: {
