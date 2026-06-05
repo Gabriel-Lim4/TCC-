@@ -14,7 +14,11 @@ import crypto           from 'crypto';
 // Gera URL de autorização e state CSRF. Front redireciona o browser.
 export async function iniciarConexao(req, res) {
   try {
-    const state          = crypto.randomBytes(16).toString('hex');
+    const random = crypto.randomBytes(16).toString('hex');
+    // Embute o userId no state: "123:randomhex"
+    // O Meta devolve esse state intacto no callback
+    const state  = `${req.usuario.id}:${random}`;
+
     const urlAutorizacao = metaService.gerarUrlAutorizacao(state);
     return res.status(200).json({ url: urlAutorizacao, state });
   } catch (err) {
