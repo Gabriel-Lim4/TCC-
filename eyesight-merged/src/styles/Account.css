@@ -1,0 +1,335 @@
+/* importação das fontes do google */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Tomorrow:wght@400;700&display=swap');
+
+/* reset geral do css */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  text-decoration: none; /* remove sublinhado */
+  list-style: none; /* remove bolinhas */
+}
+
+body {
+  font-family: 'Inter', sans-serif; /* fonte principal */
+  background-color: #031127;
+  color: white;
+  overflow-x: hidden; /* evita rolagem lateral */
+  background: linear-gradient(180deg, #051836, #1a042e); /* fundo em degradê */
+}
+
+/* container principal */
+.dashboard-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #031127;
+  margin: 0;
+}
+
+/* sidebar fixa */
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background-color: #0b1120;
+  border-right: 1px solid #1e293b;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.sidebar h2 {
+  font-family: 'Tomorrow', sans-serif; /* fonte do titulo */
+  font-size: 1.5rem;
+  margin-bottom: 40px;
+  color: #ffffff;
+}
+
+/* itens do menu */
+.sidebar ul li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  margin-bottom: 5px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.3s;
+  color: #94a3b8; /* cor padrão */
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* links do menu */
+.sidebar ul li a {
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* item ativo roxo */
+.sidebar ul li.active-purple {
+  background: linear-gradient(90deg, #1e1b4b 0%, #312e81 100%);
+  color: #818cf8 !important;
+  border: 1px solid #4338ca;
+}
+
+/* item ativo cinza */
+.sidebar ul li.active-gray {
+  background: #1e293b;
+  color: #ffffff !important;
+}
+
+/* efeito hover */
+.sidebar ul li:hover {
+  background: rgba(30, 41, 59, 0.6);
+  color: #ffffff;
+}
+
+:root {
+  --bg-main: #0B132B;
+  --bg-card: #111C3A;
+  --text-main: #FFFFFF;
+  --text-muted: #8F9CAE;
+  --purple-gradient: linear-gradient(135deg, #4F46E5 0%, #9333EA 100%);
+  --green-status: #10B981;
+  --red-action: #EF4444;
+  --border-color: #1E293B;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: 'Inter', -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.account-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+/* Cabeçalho */
+.account-header {
+  margin-bottom: 40px;
+}
+
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon-wrapper {
+  background: var(--purple-gradient);
+  font-size: 24px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.header-text h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+}
+
+.header-text p {
+  color: var(--text-muted);
+  margin: 0;
+  font-size: 15px;
+}
+
+/* Estrutura das Seções */
+.account-section {
+  margin-bottom: 48px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.section-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Botões */
+.add-account-btn {
+  background: var(--purple-gradient);
+  color: var(--text-main);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.add-account-btn:hover {
+  opacity: 0.9;
+}
+
+/* Grid layout de duas colunas */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+/* Estilização dos Cards Ativos */
+.account-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card-header-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  position: relative;
+}
+
+.platform-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Cores dos gradientes dos logos */
+.icon-tiktok, .icon-tiktok-shop { background: linear-gradient(135deg, #00F2FE 0%, #FE0979 100%); }
+.icon-instagram { background: linear-gradient(135deg, #F9CE34 0%, #EE2A7B 50%, #6228D7 100%); }
+.icon-facebook { background: #1877F2; }
+.icon-youtube { background: #FF0000; }
+.icon-linkedin { background: #0A66C2; }
+
+.platform-details {
+  flex-grow: 1;
+}
+
+.platform-details h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.platform-type, .platform-username {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.settings-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.settings-btn:hover {
+  color: var(--text-main);
+}
+
+/* Rodapé do card */
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 16px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green-status);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.disconnect-btn {
+  background: transparent;
+  border: none;
+  color: var(--red-action);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.disconnect-btn:hover {
+  filter: brightness(1.2);
+}
+
+/* Plataformas Disponíveis */
+.available-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.available-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.available-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.connect-btn {
+  background: rgba(79, 70, 229, 0.15);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  color: #A78BFA;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connect-btn:hover {
+  background: var(--purple-gradient);
+  color: var(--text-main);
+  border-color: transparent;
+}
+
+@media (max-width: 768px) {
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+}

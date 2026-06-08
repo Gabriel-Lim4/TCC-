@@ -1,0 +1,269 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tomorrow:wght@400;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  text-decoration: none;
+  list-style: none;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(180deg, #051836, #1a042e);
+  color: white;
+  overflow-x: hidden;
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 40px;
+  background: linear-gradient(180deg, #031127 0%, #120222 100%);
+  min-height: 100vh;
+}
+
+.page-header-title h1 {
+  font-size: 2.5rem;
+  font-family: 'Tomorrow', sans-serif;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #94a3b8;
+  margin-bottom: 28px;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-family: 'Tomorrow', sans-serif;
+  margin-top: 40px;
+  margin-bottom: 20px;
+  color: white;
+}
+
+/* ── Feedback ── */
+.feedback-msg {
+  padding: 10px 16px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.feedback-erro   { background: rgba(229,62,62,0.1);  color: #fc8181; border: 1px solid rgba(229,62,62,0.3);  }
+.feedback-sucesso{ background: rgba(56,161,105,0.1); color: #68d391; border: 1px solid rgba(56,161,105,0.3); }
+
+/* ── Barra de conexão ── */
+.connection-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.connected-label {
+  font-size: 0.9rem;
+  color: #68d391;
+  font-weight: 500;
+}
+
+.btn-conectar {
+  background: linear-gradient(135deg, #0084ff, #0060cc);
+  color: white;
+  border: none;
+  padding: 10px 22px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+.btn-conectar:hover { opacity: 0.85; }
+
+.btn-desconectar {
+  background: transparent;
+  color: #fc8181;
+  border: 1px solid rgba(229,62,62,0.4);
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+.btn-desconectar:hover { background: rgba(229,62,62,0.1); }
+
+.btn-atualizar {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #1e293b;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-atualizar:hover { background: #1e293b; color: white; }
+.btn-atualizar:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Cards de métricas ── */
+.cards-top {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  width: 100%;
+}
+
+.card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 22px;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.card:hover {
+  transform: translateY(-5px);
+  border-color: #0084ff;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 15px;
+}
+
+.icon-box.meta-accent {
+  background-color: rgba(0, 132, 255, 0.08);
+  border: 1px solid rgba(0, 132, 255, 0.2);
+  color: #00c6ff;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.green-text {
+  color: #10b981;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.card-title {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.card-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
+
+/* ── Lista de campanhas ── */
+.loading-text { color: #94a3b8; margin-top: 12px; }
+.empty-text   { color: #64748b; margin-top: 12px;  font-size: 0.9rem; }
+
+.campaign-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  margin-top: 10px;
+  gap: 12px;
+  transition: border-color 0.2s;
+}
+.campaign-row:hover { border-color: #0084ff; }
+
+.campaign-objective {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-left: 8px;
+}
+
+.campaign-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.status-active   { background: rgba(56,161,105,0.15); color: #68d391; }
+.status-paused   { background: rgba(234,179,8,0.15);  color: #fbbf24; }
+.status-archived { background: rgba(100,116,139,0.15);color: #94a3b8; }
+
+/* ── Por Plataforma ── */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.analytics-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 20px;
+  padding: 30px;
+  transition: transform 0.3s, border-color 0.3s;
+}
+.analytics-card:hover {
+  transform: translateY(-5px);
+  border-color: #0084ff;
+}
+
+.analytics-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+.analytics-card-header h2 {
+  font-family: 'Tomorrow', sans-serif;
+  font-size: 1.35rem;
+  margin: 0;
+}
+.section-icon { font-size: 1.5rem; }
+.fb-color     { color: #1877f2; }
+.ig-color     { color: #e1306c; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 25px;
+}
+.stats-grid p  { color: #94a3b8; font-size: 14px; }
+.stats-grid h1 { font-size: 2rem; font-weight: 700; margin-top: 5px; }
+
+/* ── Responsividade ── */
+@media (max-width: 1024px) {
+  .cards-top, .analytics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .dashboard-content { padding: 20px; }
+  .cards-top, .analytics-grid, .stats-grid { grid-template-columns: 1fr; }
+}
+.select-periodo {
+  background: #0f172a;
+  color: white;
+  border: 1px solid #1e293b;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+}
+.select-periodo:hover { border-color: #0084ff; }
