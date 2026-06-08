@@ -1,0 +1,295 @@
+/* importação das fontes do google */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tomorrow:wght@400;700&display=swap');
+
+/* reset geral do css */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  text-decoration: none; /* remove sublinhado */
+  list-style: none; /* remove bolinhas */
+}
+
+body {
+  font-family: 'Inter', sans-serif; /* fonte principal */
+  background-color: #031127;
+  color: white;
+  overflow-x: hidden; /* evita rolagem lateral */
+  background: linear-gradient(180deg, #051836, #1a042e); /* fundo em degradê */
+}
+
+/* container principal */
+.dashboard-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #031127;
+  margin: 0;
+}
+
+/* sidebar fixa */
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background-color: #0b1120;
+  border-right: 1px solid #1e293b;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.sidebar h2 {
+  font-family: 'Tomorrow', sans-serif; /* fonte do titulo */
+  font-size: 1.5rem;
+  margin-bottom: 40px;
+  color: #ffffff;
+}
+
+/* itens do menu */
+.sidebar ul li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  margin-bottom: 5px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.3s;
+  color: #94a3b8; /* cor padrão */
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* links do menu */
+.sidebar ul li a {
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* item ativo roxo */
+.sidebar ul li.active-purple {
+  background: linear-gradient(90deg, #1e1b4b 0%, #312e81 100%);
+  color: #818cf8 !important;
+  border: 1px solid #4338ca;
+}
+
+/* item ativo cinza */
+.sidebar ul li.active-gray {
+  background: #1e293b;
+  color: #ffffff !important;
+}
+
+/* efeito hover */
+.sidebar ul li:hover {
+  background: rgba(30, 41, 59, 0.6);
+  color: #ffffff;
+}
+
+/* conteúdo principal */
+/* Container de conteúdo */
+.tools-content {
+  flex: 1;
+  padding: 40px;
+  background: linear-gradient(180deg, #031127 0%, #120222 100%);
+  min-height: 100vh;
+}
+
+.tools-content h1 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  font-family: 'Tomorrow', sans-serif;
+}
+
+.subtitle {
+  color: #94a3b8;
+  margin-bottom: 30px;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-family: 'Tomorrow', sans-serif;
+  margin-top: 40px;
+  margin-bottom: 20px;
+  color: white;
+}
+
+/* --- BANNER DE DESTAQUE --- */
+.featured-banner {
+  background: linear-gradient(100deg, #0f1c3f 0%, #1c1435 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 35px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.badge-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.badge-new {
+  background-color: #1d4ed8;
+  color: #60a5fa;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+
+.badge-text {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.featured-info h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 12px;
+}
+
+.featured-info p {
+  color: #94a3b8;
+  max-width: 600px;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-bottom: 25px;
+}
+
+/* Botão Roxo/Azul em degradê */
+.btn-primary-gradient {
+  background: linear-gradient(90deg, #2563eb 0%, #a855f7 100%);
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-primary-gradient:hover {
+  opacity: 0.9;
+}
+
+/* Ícone grande azul no canto direito do Banner */
+.featured-icon-box {
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  width: 110px;
+  height: 110px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  font-size: 3rem;
+}
+
+/* --- GRID E CARDS DE FERRAMENTAS --- */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 25px;
+}
+
+.tool-card {
+  background: #0b1329;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 240px;
+}
+
+.tool-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.tool-icon-box {
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  font-size: 1.3rem;
+}
+
+/* Selo verde de "Disponível" */
+.status-badge {
+  background-color: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+}
+
+.tool-card-body h3 {
+  color: white;
+  font-size: 1.25rem;
+  margin-bottom: 8px;
+}
+
+.tool-card-body p {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin-bottom: 25px;
+}
+
+/* Botão Azul Escuro inferior do Card */
+.btn-secondary {
+  background-color: #132247;
+  border: 1px solid #1d3573;
+  color: #3b82f6;
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #1a2f63;
+}
+
+/* Responsividade */
+@media (max-width: 900px) {
+  .featured-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 30px;
+  }
+  .featured-icon-box {
+    align-self: flex-end;
+  }
+  .tools-grid {
+    grid-template-columns: 1fr;
+  }
+}

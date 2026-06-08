@@ -1,0 +1,175 @@
+/* IMPORTAÇÃO DE FONTES */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Tomorrow:wght@400;700&display=swap');
+
+/* RESET GLOBAL */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  text-decoration: none;
+  list-style: none;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(180deg, #051836, #1a042e);
+  color: white;
+  overflow-x: hidden;
+}
+
+/* CONTEÚDO PRINCIPAL */
+.dashboard-content {
+  flex: 1;
+  padding: 40px;
+  background: linear-gradient(180deg, #031127 0%, #120222 100%);
+  min-height: 100vh;
+}
+
+.dashboard-content h1 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  font-family: 'Tomorrow', sans-serif;
+}
+
+.subtitle {
+  color: #94a3b8;
+  margin-bottom: 40px;
+}
+
+/* Títulos das seções secundárias */
+.section-title {
+  font-size: 1.5rem;
+  font-family: 'Tomorrow', sans-serif;
+  margin-top: 40px;
+  margin-bottom: 20px;
+  color: white;
+}
+
+/* --- GRID DE MÉTICAS --- */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-top: 15px;
+  width: 100%;
+}
+
+/* Estilização base do Card */
+.card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 22px;
+  min-height: 145px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s ease, border-color 0.2s;
+}
+
+/* Card especial da primeira linha (Aumenta um pouco para caber o texto verde) */
+.card.top-row-card {
+  min-height: 165px;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  border-color: #00d2ff; /* Tom ciano brilhante no hover */
+}
+
+/* Cabeçalho interno do Card */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+/* Caixa de ícones customizada para Métricas (Tom Ciano Neon) */
+.icon-box.metrics-accent {
+  background-color: rgba(0, 210, 255, 0.07) !important;
+  border: 1px solid rgba(0, 210, 255, 0.2) !important;
+  color: #00d2ff !important;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.card-title {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+
+.card-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
+
+/* Texto especial solicitado: "+0% vs mês anterior" embaixo do número */
+.month-comparison-text {
+  color: #10b981;
+  font-weight: 500;
+  font-size: 0.8rem;
+  margin-top: 8px;
+  display: block;
+}
+
+/* --- TABELA DE COMPARAÇÃO --- */
+.table-container {
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 15px;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: white;
+}
+
+.table th {
+  text-align: left;
+  padding: 14px;
+  color: #94a3b8;
+  font-weight: 500;
+  border-bottom: 1px solid #1e293b;
+  font-size: 0.9rem;
+}
+
+.table td {
+  padding: 14px;
+  border-bottom: 1px solid #1e293b;
+  font-size: 0.9rem;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* --- RESPONSIVIDADE --- */
+@media (max-width: 1024px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-content {
+    padding: 20px;
+  }
+}
