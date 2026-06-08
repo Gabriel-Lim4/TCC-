@@ -1,0 +1,117 @@
+// ─────────────────────────────────────────────────────────────
+// prisma/schema.prisma
+//
+// Reflete exatamente o banco Railway atual.
+// Ajustes feitos:
+//   - contas_vinculadas: adicionado @@unique([fk_id_usuario, plataforma])
+//     para o upsert do callback OAuth funcionar
+//   - campanhas: adicionado @unique em id_externo
+//     para o upsert de campanhas funcionar
+//   - metricas: periodo_metrica mantido como String (como está no banco real)
+//   - enum contas_vinculadas_plataforma mantido (meta | tiktok)
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ── usuarios ─────────────────────────────────────────────────
+model usuarios {
+  pk_id_usuario     Int                 @id @default(autoincrement())
+  nome_usuario      String              @db.VarChar(100)
+  email_usuario     String              @unique @db.VarChar(150)
+  senha_hash        String              @db.VarChar(255)
+  data_criacao_user DateTime?           @default(now()) @db.DateTime(0)
+
+  // Relações
+  analises          analises_ia[]
+  contas            contas_vinculadas[]
+}
+
+// ── contas_vinculadas ─────────────────────────────────────────
+// Guarda o token OAuth de cada plataforma por usuário.
+// @@unique garante que cada usuário tem no máximo 1 conta por plataforma,
+// e habilita o upsert no callback OAuth sem criar duplicatas.
+model contas_vinculadas {
+  pk_id_conta   Int                          @id @default(autoincrement())
+  fk_id_usuario Int
+  plataforma    contas_vinculadas_plataforma
+  acess_token   String                       @db.Text
+  account_id    String                       @db.VarChar(100)
+  vinculado_em  DateTime?                    @default(now()) @db.DateTime(0)
+
+  // Relações
+  usuario       usuarios                     @relation(fields: [fk_id_usuario], references: [pk_id_usuario], onDelete: Cascade)
+  campanhas     campanhas[]
+
+  @@unique([fk_id_usuario, plataforma], name: "fk_id_usuario_plataforma")
+  @@index([fk_id_usuario])
+}
+
+// ── campanhas ─────────────────────────────────────────────────
+// Campanhas sincronizadas da Graph API do Meta.
+// id_externo é único: é o ID da campanha no Meta (ex: "23851234567890").
+// Isso garante que o upsert não cria duplicatas ao sincronizar.
+model campanhas {
+  pk_id_campanha  Int               @id @default(autoincrement())
+  fk_id_conta     Int
+  id_externo      String            @unique @db.VarChar(100)
+  nome_campanha   String            @db.VarChar(200)
+  status_campanha String?           @db.VarChar(50)
+  objetivo        String?           @db.VarChar(100)
+  sincronizado_em DateTime?         @default(now()) @db.DateTime(0)
+
+  // Relações
+  conta           contas_vinculadas @relation(fields: [fk_id_conta], references: [pk_id_conta], onDelete: Cascade)
+  metricas        metricas[]
+  analises        analises_ia[]
+
+  @@index([fk_id_conta])
+}
+
+// ── metricas ──────────────────────────────────────────────────
+// Cada linha é uma métrica de uma campanha num período.
+// tipo_metrica: 'impressions', 'clicks', 'spend', 'ctr', etc.
+// periodo_metrica: String para flexibilidade ('2025-01-15', 'last_30d', etc.)
+model metricas {
+  pk_id_metrica   Int       @id @default(autoincrement())
+  fk_id_campanha  Int
+  tipo_metrica    String    @db.VarChar(100)
+  valor_metrica   Decimal   @db.Decimal(15, 4)
+  periodo_metrica String    @db.VarChar(50)
+  coletado_em     DateTime? @default(now()) @db.DateTime(0)
+
+  // Relação
+  campanha        campanhas @relation(fields: [fk_id_campanha], references: [pk_id_campanha], onDelete: Cascade)
+
+  @@index([fk_id_campanha])
+}
+
+// ── analises_ia ───────────────────────────────────────────────
+// Histórico de análises geradas por IA para cada campanha.
+model analises_ia {
+  pk_id_analise        Int       @id @default(autoincrement())
+  fk_id_usuario        Int
+  fk_id_campanha       Int
+  texto_analise        String?   @db.Text
+  sugestao_analise     String?   @db.Text
+  data_geracao_analise DateTime? @default(now()) @db.DateTime(0)
+
+  // Relações
+  usuario              usuarios  @relation(fields: [fk_id_usuario], references: [pk_id_usuario], onDelete: Cascade)
+  campanha             campanhas @relation(fields: [fk_id_campanha], references: [pk_id_campanha], onDelete: Cascade)
+
+  @@index([fk_id_campanha])
+  @@index([fk_id_usuario])
+}
+
+// ── Enum de plataformas ───────────────────────────────────────
+enum contas_vinculadas_plataforma {
+  meta
+  tiktok
+}
