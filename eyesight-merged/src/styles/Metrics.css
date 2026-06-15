@@ -173,3 +173,42 @@ body {
     padding: 20px;
   }
 }
+.periodo-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  background: #0f172a;
+  color: #94a3b8;
+  border: 1px solid #1e293b;
+  padding: 8px 18px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.tab-btn:hover  { border-color: #00d2ff; color: white; }
+.tab-ativo      { background: #00d2ff18; border-color: #00d2ff; color: #00d2ff; font-weight: 600; }
+
+.chart-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 24px;
+  margin-top: 15px;
+}
+
+.campaign-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.status-active   { background: rgba(56,161,105,0.15); color: #68d391; }
+.status-paused   { background: rgba(234,179,8,0.15);  color: #fbbf24; }
+.status-archived { background: rgba(100,116,139,0.15);color: #94a3b8; }
+
+.empty-text { color: #64748b; font-size: 0.9rem; }
