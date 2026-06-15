@@ -96,5 +96,19 @@ export async function login(req, res) {
 // ── GET /auth/me ─────────────────────────────────────────────
 // authMiddleware já validou e injetou req.usuario — só devolve.
 export async function me(req, res) {
-  return res.status(200).json({ usuario: req.usuario });
+  try {
+    const usuario = await prisma.usuarios.findUnique({
+      where:  { pk_id_usuario: req.usuario.id },
+      select: { pk_id_usuario: true, nome_usuario: true, email_usuario: true },
+    });
+    return res.status(200).json({
+      usuario: {
+        id:    usuario.pk_id_usuario,
+        nome:  usuario.nome_usuario,
+        email: usuario.email_usuario,
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro ao buscar usuário.' });
+  }
 }
