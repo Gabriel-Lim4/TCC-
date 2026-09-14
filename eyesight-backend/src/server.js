@@ -33,6 +33,8 @@ async function start() {
     console.log(`\n[SERVER] ✅ Rodando em http://localhost:${env.app.port} [${env.app.nodeEnv}]`);
     console.log('[SERVER]    POST   /auth/cadastro');
     console.log('[SERVER]    POST   /auth/login');
+    console.log('[SERVER]    GET    /auth/verificar-email');
+    console.log('[SERVER]    POST   /auth/reenviar-verificacao');
     console.log('[SERVER]    GET    /auth/me');
     console.log('[SERVER]    GET    /meta/conectar');
     console.log('[SERVER]    GET    /meta/callback     ← pública');

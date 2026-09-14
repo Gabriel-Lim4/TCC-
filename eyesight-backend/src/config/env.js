@@ -20,4 +20,17 @@ export default {
   },
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   databaseUrl: process.env.DATABASE_URL,
+
+  supabase: {
+  url: process.env.SUPABASE_URL,
+  anonKey: process.env.SUPABASE_ANON_KEY,
+},
+
+  resend: {
+    apiKey: process.env.RESEND_API_KEY,
+    from:   process.env.EMAIL_FROM || 'Eyesight <onboarding@resend.dev>',
+  },
+  emailVerification: {
+    expiresInHours: Number(process.env.EMAIL_VERIFICATION_EXPIRES_HOURS || 24),
+  },
 };

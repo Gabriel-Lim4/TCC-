@@ -9,16 +9,37 @@ import { prisma }       from '../config/database.js';
 import * as metaService from '../services/metaService.js';
 import env              from '../config/env.js';
 import crypto           from 'crypto';
+import jwt from 'jsonwebtoken';
 
 
 // ── GET /meta/conectar ───────────────────────────────────────
 // Gera URL de autorização e state CSRF. Front redireciona o browser.
 export async function iniciarConexao(req, res) {
-  const state = crypto.randomBytes(16).toString('hex');
-  // Embute o userId no state para recuperar no callback
-  const stateComId = `${state}:${req.usuario.id}`;
-  const urlAutorizacao = metaService.gerarUrlAutorizacao(stateComId);
-  return res.status(200).json({ url: urlAutorizacao, state: stateComId });
+  try {
+    const state = jwt.sign(
+      {
+        userId: req.usuario.id,
+        finalidade: 'meta-oauth',
+      },
+      env.jwt.secret,
+      {
+        expiresIn: '10m',
+      }
+    );
+
+    const urlAutorizacao = metaService.gerarUrlAutorizacao(state);
+
+    return res.status(200).json({
+      url: urlAutorizacao,
+    });
+
+  } catch (err) {
+    console.error('[META] Erro ao iniciar OAuth:', err.message);
+
+    return res.status(500).json({
+      erro: 'Não foi possível iniciar a conexão com o Meta.',
+    });
+  }
 }
 
 // ── GET /meta/callback ───────────────────────────────────────
@@ -26,10 +47,31 @@ export async function iniciarConexao(req, res) {
 // Não tem JWT: o userId vem como query param passado pelo front.
 export async function callback(req, res) {
   const { code, error, state } = req.query;
-  if (error) return res.redirect(`${env.frontendUrl}/app/meta?meta=negado`);
 
-  const [, userId] = state?.split(':') ?? [];
-  if (!code || !userId) return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+if (error) {
+  return res.redirect(`${env.frontendUrl}/app/meta?meta=negado`);
+}
+
+if (!code || !state) {
+  return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+}
+
+let userId;
+
+try {
+  const payload = jwt.verify(state, env.jwt.secret);
+
+  if (payload.finalidade !== 'meta-oauth') {
+    return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+  }
+
+  userId = payload.userId;
+
+} catch (err) {
+  console.error('[META] State OAuth inválido:', err.message);
+
+  return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+}
  
 
   try {
@@ -122,26 +164,31 @@ export async function listarCampanhas(req, res) {
 
     // Sincroniza cada campanha no banco em paralelo
     // @unique em id_externo no schema habilita o upsert
-    await Promise.all(
-      campanhasApi.map(c =>
-        prisma.campanhas.upsert({
-          where:  { id_externo: c.id },
-          update: {
-            nome_campanha:   c.name,
-            status_campanha: c.status,
-            objetivo:        c.objective || null,
-            sincronizado_em: new Date(),
-          },
-          create: {
-            fk_id_conta:     conta.pk_id_conta,
-            id_externo:      c.id,
-            nome_campanha:   c.name,
-            status_campanha: c.status,
-            objetivo:        c.objective || null,
-          },
-        })
-      )
-    );
+  await Promise.all(
+  campanhasApi.map(c =>
+    prisma.campanhas.upsert({
+      where: {
+        fk_id_conta_id_externo: {
+          fk_id_conta: conta.pk_id_conta,
+          id_externo: c.id,
+        },
+      },
+      update: {
+        nome_campanha:   c.name,
+        status_campanha: c.status,
+        objetivo:        c.objective || null,
+        sincronizado_em: new Date(),
+      },
+      create: {
+        fk_id_conta:     conta.pk_id_conta,
+        id_externo:      c.id,
+        nome_campanha:   c.name,
+        status_campanha: c.status,
+        objetivo:        c.objective || null,
+      },
+    })
+  )
+);
 
     return res.status(200).json({
       campanhas:    campanhasApi,

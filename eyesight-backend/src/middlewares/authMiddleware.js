@@ -1,64 +1,88 @@
 // ─────────────────────────────────────────────────────────────
 // middlewares/authMiddleware.js
 //
-// Valida o JWT e injeta req.usuario para os controllers.
-// Try/catch duplo:
-//   - Interno: erros esperados do JWT (expirado, inválido)
-//   - Externo: erros inesperados (banco fora, bug do Prisma)
+// Valida o token do Supabase Auth e injeta req.usuario
+// para os controllers.
+//
+// Fluxo:
+//   Bearer Token
+//        ↓
+//   Supabase Auth
+//        ↓
+//   auth.users.id
+//        ↓
+//   public.usuarios.auth_user_id
+//        ↓
+//   req.usuario
 // ─────────────────────────────────────────────────────────────
 
-import jwt        from 'jsonwebtoken';
-import env        from '../config/env.js';
 import { prisma } from '../config/database.js';
+import { supabase } from '../config/supabase.js';
 
 export default async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ erro: 'Token não fornecido. Faça login para continuar.' });
+    return res.status(401).json({
+      erro: 'Token não fornecido. Faça login para continuar.'
+    });
   }
 
-  const token = authHeader.split(' ')[1];
+  const token = authHeader.substring(7);
+
+  if (!token) {
+    return res.status(401).json({
+      erro: 'Token não fornecido. Faça login para continuar.'
+    });
+  }
 
   try {
-    // Try interno: só erros do JWT
-    let payload;
-    try {
-      payload = jwt.verify(token, env.jwt.secret);
-    } catch (jwtErr) {
-      const mensagem = jwtErr.name === 'TokenExpiredError'
-        ? 'Token expirado. Faça login novamente.'
-        : 'Token inválido.';
-      return res.status(401).json({ erro: mensagem });
+    // Valida o token diretamente pelo Supabase Auth.
+    const {
+      data: { user },
+      error
+    } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({
+        erro: 'Token inválido ou expirado.'
+      });
     }
 
-    // Confirma que o usuário ainda existe no banco
-    // (cobre caso de conta deletada com token ainda válido)
+    // Confirma que o perfil correspondente ainda existe
+    // na tabela pública de usuários.
     const usuario = await prisma.usuarios.findUnique({
-      where:  { pk_id_usuario: payload.id },
+      where: {
+        auth_user_id: user.id
+      },
       select: {
         pk_id_usuario: true,
-        nome_usuario:  true,
-        email_usuario: true,
-      },
+        nome_usuario: true,
+        auth_user_id: true
+      }
     });
 
     if (!usuario) {
-      return res.status(401).json({ erro: 'Usuário não encontrado. Token inválido.' });
+      return res.status(401).json({
+        erro: 'Perfil do usuário não encontrado.'
+      });
     }
 
-    // Injeta na req para os controllers usarem sem decodificar o token de novo
-    req.usuario = {
-      id:    usuario.pk_id_usuario,
-      nome:  usuario.nome_usuario,
-      email: usuario.email_usuario,
-    };
+    // Injeta o usuário autenticado na requisição.
+   req.usuario = {
+  id: usuario.pk_id_usuario,
+  nome: usuario.nome_usuario,
+  email: user.email,
+  auth_user_id: usuario.auth_user_id
+};
 
     next();
 
   } catch (err) {
-    // Erro inesperado — não expõe detalhes ao cliente
     console.error('[AUTH MIDDLEWARE] Erro inesperado:', err);
-    return res.status(500).json({ erro: 'Erro interno na autenticação. Tente novamente.' });
+
+    return res.status(500).json({
+      erro: 'Erro interno na autenticação. Tente novamente.'
+    });
   }
 };
