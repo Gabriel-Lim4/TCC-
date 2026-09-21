@@ -1,0 +1,79 @@
+:root{
+
+    /* ===== Fundo ===== */
+    --bg-primary: #081221;
+    --bg-secondary: #0f172a;
+    --bg-tertiary: #111827;
+
+    /* Navbar / Sidebar */
+    --surface: #0b1220;
+
+    /* Cards */
+    --card-bg: #111827;
+    --card-border: #1f2937;
+    --card-border-hover: #334155;
+
+    /* Texto */
+    --text-primary: #ffffff;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+
+    /* ===== Azul (identidade principal) ===== */
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --primary-soft: rgba(59, 130, 246, 0.12);
+    --primary-border: rgba(59, 130, 246, 0.28);
+
+    /* ===== Roxo (identidade secundária) ===== */
+    --secondary: #8b5cf6;
+    --secondary-hover: #7c3aed;
+    --secondary-soft: rgba(139, 92, 246, 0.12);
+    --secondary-border: rgba(139, 92, 246, 0.28);
+
+    /* Gradiente de marca — usado nos destaques, botões primários e na linha de assinatura dos cards */
+    --gradient-brand: linear-gradient(135deg, var(--primary), var(--secondary));
+    --gradient-brand-soft: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(139, 92, 246, 0.12));
+
+    /* Sucesso / Erro */
+    --success: #10b981;
+    --success-soft: rgba(16, 185, 129, 0.1);
+    --success-border: rgba(16, 185, 129, 0.28);
+    --danger: #ef4444;
+    --danger-soft: rgba(239, 68, 68, 0.1);
+    --danger-border: rgba(239, 68, 68, 0.28);
+
+    /* ===== Cores por plataforma ===== */
+    --google: #f59e0b;
+    --google-soft: rgba(245, 158, 11, 0.1);
+    --instagram: #ec4899;
+    --instagram-soft: rgba(236, 72, 153, 0.1);
+    --instagram-alt: #f77737;
+    --tiktok: #06b6d4;
+    --tiktok-soft: rgba(6, 182, 212, 0.1);
+    --meta: #0084ff;
+    --meta-soft: rgba(0, 132, 255, 0.1);
+
+    /* Paleta usada em gráficos (recharts) — ordem pensada pra dar contraste entre séries */
+    --chart-1: var(--primary);
+    --chart-2: var(--secondary);
+    --chart-3: var(--tiktok);
+    --chart-4: var(--google);
+    --chart-5: var(--instagram);
+    --chart-6: var(--success);
+
+    /* Tipografia */
+    --font-display: 'Tomorrow', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Inter', monospace;
+
+    /* Raios */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+
+    /* Sombras */
+    --shadow: rgba(0,0,0,.25);
+    --shadow-glow: 0 16px 32px -18px rgba(59, 130, 246, 0.35);
+
+}
