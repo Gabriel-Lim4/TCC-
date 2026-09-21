@@ -16,9 +16,10 @@ export default {
   meta: {
     appId:       process.env.META_APP_ID,
     appSecret:   process.env.META_APP_SECRET,
-    redirectUri: process.env.META_REDIRECT_URI,
+    redirectUri: process.env.META_REDIRECT_URI?.trim(),
+    graphVersion: process.env.META_GRAPH_VERSION || 'v25.0',
   },
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, ''),
   databaseUrl: process.env.DATABASE_URL,
 
   supabase: {

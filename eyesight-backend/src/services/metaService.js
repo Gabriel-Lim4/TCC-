@@ -5,7 +5,7 @@
 import axios from 'axios';
 import env   from '../config/env.js';
 
-const GRAPH_VERSION = 'v19.0';
+const GRAPH_VERSION = env.meta.graphVersion; // v19.0 expirou em mai/2026 — configurável via META_GRAPH_VERSION
 const GRAPH_URL     = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 // ── 1. Gera URL de autorização OAuth ────────────────────────
@@ -17,7 +17,7 @@ export function gerarUrlAutorizacao(state) {
     response_type: 'code',
     state,
   });
-  return `https://www.facebook.com/dialog/oauth?${params.toString()}`;
+  return `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`;
 }
 
 // ── 2. Troca o code temporário por token curto (~1h) ─────────
@@ -55,8 +55,11 @@ export async function buscarAdAccountId(accessToken) {
     params: { fields: 'id,name,account_status', access_token: accessToken },
   });
   const contas = resposta.data.data;
-  if (!contas || contas.length === 0)
-    throw new Error('Nenhuma conta de anúncios encontrada para este usuário.');
+  if (!contas || contas.length === 0) {
+    const e = new Error('Nenhuma conta de anúncios encontrada para este usuário.');
+    e.code = 'SEM_CONTA';
+    throw e;
+  }
   return contas[0].id;
 }
 

@@ -108,6 +108,9 @@ try {
     return res.redirect(`${env.frontendUrl}/app/meta?meta=conectado`);
 
   } catch (err) {
+    if (err.code === 'SEM_CONTA') {
+      return res.redirect(`${env.frontendUrl}/app/meta?meta=sem-conta`);
+    }
     console.error('[META] Erro no callback:', err.message);
     if (err.response?.data?.error) {
       const { mensagem } = metaService.extrairErroMeta(err);
