@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model usuarios {
+  pk_id_usuario     Int                 @id @default(autoincrement())
+  nome_usuario      String              @db.VarChar(100)
+  data_criacao_user DateTime?           @default(now())
+  auth_user_id      String?             @unique @db.Uuid
+  analises          analises_ia[]
+  contas            contas_vinculadas[]
+}
+
+model contas_vinculadas {
+  pk_id_conta   Int                          @id @default(autoincrement())
+  fk_id_usuario Int
+  plataforma    contas_vinculadas_plataforma
+  acess_token   String
+  account_id    String                       @db.VarChar(100)
+  vinculado_em  DateTime?                    @default(now())
+  campanhas     campanhas[]
+  usuario       usuarios                     @relation(fields: [fk_id_usuario], references: [pk_id_usuario], onDelete: Cascade)
+
+  @@unique([fk_id_usuario, plataforma], name: "fk_id_usuario_plataforma")
+  @@index([fk_id_usuario])
+}
+
+model campanhas {
+  pk_id_campanha  Int               @id @default(autoincrement())
+  fk_id_conta     Int
+  id_externo      String            @db.VarChar(100)
+  nome_campanha   String            @db.VarChar(200)
+  status_campanha String?           @db.VarChar(50)
+  objetivo        String?           @db.VarChar(100)
+  sincronizado_em DateTime?         @default(now())
+  analises        analises_ia[]
+  conta           contas_vinculadas @relation(fields: [fk_id_conta], references: [pk_id_conta], onDelete: Cascade)
+  metricas        metricas[]
+
+  @@unique([fk_id_conta, id_externo])
+  @@index([fk_id_conta])
+}
+
+model metricas {
+  pk_id_metrica   Int       @id @default(autoincrement())
+  fk_id_campanha  Int
+  tipo_metrica    String    @db.VarChar(100)
+  valor_metrica   Decimal   @db.Decimal(15, 4)
+  periodo_metrica String    @db.VarChar(50)
+  coletado_em     DateTime? @default(now())
+  campanha        campanhas @relation(fields: [fk_id_campanha], references: [pk_id_campanha], onDelete: Cascade)
+
+  @@index([fk_id_campanha])
+}
+
+model analises_ia {
+  pk_id_analise        Int       @id @default(autoincrement())
+  fk_id_usuario        Int
+  fk_id_campanha       Int
+  texto_analise        String?
+  sugestao_analise     String?
+  data_geracao_analise DateTime? @default(now())
+  campanha             campanhas @relation(fields: [fk_id_campanha], references: [pk_id_campanha], onDelete: Cascade)
+  usuario              usuarios  @relation(fields: [fk_id_usuario], references: [pk_id_usuario], onDelete: Cascade)
+
+  @@index([fk_id_campanha])
+  @@index([fk_id_usuario])
+}
+
+enum contas_vinculadas_plataforma {
+  meta
+  tiktok
+}
