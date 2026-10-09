@@ -13,7 +13,7 @@ export function gerarUrlAutorizacao(state) {
   const params = new URLSearchParams({
     client_id:     env.meta.appId,
     redirect_uri:  env.meta.redirectUri,
-    scope:         'ads_read,ads_management,business_management',
+    scope:         'ads_read,business_management,pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights',
     response_type: 'code',
     state,
   });
@@ -44,7 +44,7 @@ export async function trocarPorTokenLongo(tokenCurto) {
     },
   });
   const { access_token, expires_in } = resposta.data;
-  const expiraEm = new Date(Date.now() + expires_in * 1000);
+  const expiraEm = Number(expires_in) > 0 ? new Date(Date.now() + Number(expires_in) * 1000) : null;
   return { access_token, expiraEm };
 }
 
@@ -64,17 +64,60 @@ export async function buscarAdAccountId(accessToken) {
 }
 
 // ── 5. Busca campanhas do Ad Account ────────────────────────
+export async function graphList(path, accessToken, params = {}) {
+  const rows = [];
+  let after;
+  const seen = new Set();
+  do {
+    const response = await axios.get(`${GRAPH_URL}/${path}`, {
+      params: { ...params, access_token: accessToken, limit: 100, ...(after ? { after } : {}) },
+      timeout: 30000,
+    });
+    rows.push(...(response.data.data || []));
+    after = response.data.paging?.next ? response.data.paging?.cursors?.after : undefined;
+    if (response.data.paging?.next && !after) throw new Error('Paginação Meta incompleta.');
+    if (after && seen.has(after)) throw new Error('Paginação Meta inválida.');
+    if (after) seen.add(after);
+  } while (after);
+  return rows;
+}
+
 export async function buscarCampanhas(adAccountId, accessToken) {
-  const resposta = await axios.get(`${GRAPH_URL}/${adAccountId}/campaigns`, {
-    params: {
-      fields:       'id,name,status,objective,created_time',
-      filtering:    JSON.stringify([{
-        field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED'],
-      }]),
-      access_token: accessToken,
-    },
+  return graphList(`${adAccountId}/campaigns`, accessToken, {
+    fields: 'id,name,status,objective,created_time',
   });
-  return resposta.data.data;
+}
+
+export async function buscarContaMeta(adAccountId, accessToken) {
+  const response = await axios.get(`${GRAPH_URL}/${adAccountId}`, {
+    params: { fields: 'id,name,currency,timezone_name', access_token: accessToken }, timeout: 30000,
+  });
+  return response.data;
+}
+
+// Purchase aliases overlap; select one aggregate instead of summing them.
+export function normalizeMetaInsight(row) {
+  const purchase = values => {
+    for (const type of ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase']) {
+      const item = (values || []).find(value => value.action_type === type);
+      if (item) return Number(item.value) || 0;
+    }
+    return 0;
+  };
+  return {
+    impressions: Number(row.impressions) || 0, clicks: Number(row.clicks) || 0,
+    spend: Number(row.spend) || 0, reach: Number(row.reach) || 0,
+    conversions: purchase(row.actions), revenue: purchase(row.action_values),
+  };
+}
+
+export async function buscarInsightsDiarios(adAccountId, accessToken, range) {
+  const rows = await graphList(`${adAccountId}/insights`, accessToken, {
+    fields: 'campaign_id,impressions,clicks,spend,reach,actions,action_values',
+    level: 'campaign', time_increment: 1,
+    time_range: JSON.stringify({ since: range.since, until: range.until }),
+  });
+  return rows.map(row => ({ campaignId: row.campaign_id, date: row.date_start, ...normalizeMetaInsight(row) }));
 }
 
 // ── 6. Busca insights de uma campanha ───────────────────────
@@ -82,13 +125,15 @@ export async function buscarCampanhas(adAccountId, accessToken) {
 export async function buscarInsights(campanhaId, accessToken, periodo = 'last_30d') {
   const resposta = await axios.get(`${GRAPH_URL}/${campanhaId}/insights`, {
     params: {
-      fields:       'impressions,clicks,spend,reach,ctr,cpc,cpm,frequency',
+      fields:       'impressions,clicks,spend,reach,ctr,cpc,cpm,frequency,actions,action_values',
       date_preset:  periodo,
       access_token: accessToken,
     },
   });
   const dados = resposta.data.data;
-  return dados.length > 0 ? dados[0] : null;
+  if (!dados.length) return null;
+  const { actions, action_values, ...values } = dados[0];
+  return { ...values, ...normalizeMetaInsight({ ...values, actions, action_values }) };
 }
 
 // ── Extrai erro legível da Graph API ────────────────────────
@@ -106,7 +151,7 @@ export function extrairErroMeta(err) {
   };
 
   return {
-    mensagem: mapa[erroApi.code] || erroApi.message || 'Erro desconhecido do Meta.',
+    mensagem: mapa[erroApi.code] || 'Não foi possível consultar o Meta. Confira as permissões da conta.',
     codigo:   erroApi.code,
     tipo:     erroApi.type,
   };

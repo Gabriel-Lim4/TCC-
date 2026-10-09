@@ -8,7 +8,7 @@
 
 import { PrismaClient } from '@prisma/client';
 
-export const prisma = new PrismaClient();
+const prisma = new PrismaClient();
 
 // Testa a conexão ao subir o servidor.
 // Falha rápida: melhor saber que o banco está fora no boot
@@ -16,9 +16,11 @@ export const prisma = new PrismaClient();
 export async function testConnection() {
   try {
     await prisma.$connect();
-    console.log('[DATABASE]  Conectado ao MySQL com sucesso.');
+    console.log('[DATABASE]  Conectado ao PostgreSQL com sucesso.');
   } catch (err) {
-    console.error('[DATABASE]  Falha na conexão:', err.message);
+    console.error('[DATABASE]  Falha na conexão:');
     process.exit(1);
   }
 }
+
+export { prisma };

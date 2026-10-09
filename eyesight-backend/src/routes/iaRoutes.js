@@ -1,4 +1,18 @@
-// Placeholder — implementar na etapa de IA
 import { Router } from 'express';
+import authMiddleware from '../middlewares/authMiddleware.js';
+import * as controller from '../controllers/iaController.js';
 const router = Router();
+router.use(authMiddleware);
+router.get('/status', controller.status);
+router.post('/analisar/:campanhaId', controller.analisarCampanha);
+router.get('/analises', controller.listarAnalises);
+router.get('/analises/:id', controller.detalharAnalise);
+router.delete('/analises/:id', controller.deletarAnalise);
+router.post('/chat', controller.chat);
+router.get('/planos', controller.listarPlanos);
+router.post('/planos', controller.gerarPlano);
+router.patch('/planos/:id/passos/:stepId', controller.marcarPasso);
+router.get('/conversas', controller.listarConversas);
+router.get('/conversas/:id', controller.detalharConversa);
+router.delete('/conversas/:id', controller.deletarConversa);
 export default router;

@@ -8,13 +8,16 @@
 import { prisma }       from '../config/database.js';
 import * as metaService from '../services/metaService.js';
 import env              from '../config/env.js';
-import crypto           from 'crypto';
+import { saveMetrics } from '../services/metricsStore.js';
+import { summarizeMetrics } from '../services/metricsSummary.js';
 import jwt from 'jsonwebtoken';
+import { insightPeriodSchema } from '../validators/metricasValidator.js';
 
 
 // ── GET /meta/conectar ───────────────────────────────────────
 // Gera URL de autorização e state CSRF. Front redireciona o browser.
 export async function iniciarConexao(req, res) {
+  if (!(env.meta.appId && env.meta.appSecret && env.meta.redirectUri)) return res.status(503).json({ erro: 'Integração ainda não configurada pelo administrador.' });
   try {
     const state = jwt.sign(
       {
@@ -34,7 +37,7 @@ export async function iniciarConexao(req, res) {
     });
 
   } catch (err) {
-    console.error('[META] Erro ao iniciar OAuth:', err.message);
+    console.error('[META] Erro ao iniciar OAuth:');
 
     return res.status(500).json({
       erro: 'Não foi possível iniciar a conexão com o Meta.',
@@ -44,16 +47,16 @@ export async function iniciarConexao(req, res) {
 
 // ── GET /meta/callback ───────────────────────────────────────
 // Rota PÚBLICA — o Meta redireciona o browser aqui após autorização.
-// Não tem JWT: o userId vem como query param passado pelo front.
+// O usuário é identificado pelo state assinado e validado abaixo.
 export async function callback(req, res) {
   const { code, error, state } = req.query;
 
 if (error) {
-  return res.redirect(`${env.frontendUrl}/app/meta?meta=negado`);
+  return res.redirect(`${env.frontendUrl}/app/account?meta=negado`);
 }
 
 if (!code || !state) {
-  return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+  return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
 }
 
 let userId;
@@ -62,25 +65,33 @@ try {
   const payload = jwt.verify(state, env.jwt.secret);
 
   if (payload.finalidade !== 'meta-oauth') {
-    return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+    return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
   }
 
   userId = payload.userId;
 
 } catch (err) {
-  console.error('[META] State OAuth inválido:', err.message);
+  console.error('[META] State OAuth inválido:');
 
-  return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+  return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
 }
  
 
   try {
     // Troca code → token curto → token longo
     const tokenCurto              = await metaService.trocarCodePorToken(code);
-    const { access_token }        = await metaService.trocarPorTokenLongo(tokenCurto.access_token);
+    const { access_token, expiraEm } = await metaService.trocarPorTokenLongo(tokenCurto.access_token);
 
     // Busca o Ad Account ID da conta de anúncios do usuário
     const adAccountId             = await metaService.buscarAdAccountId(access_token);
+
+    const existingAccount = await prisma.contas_vinculadas.findFirst({
+      where: { fk_id_usuario: Number(userId), plataforma: 'meta' },
+      select: { account_id: true },
+    });
+    if (existingAccount && existingAccount.account_id !== adAccountId) {
+      return res.redirect(`${env.frontendUrl}/app/account?meta=troca-bloqueada`);
+    }
 
     // upsert: cria ou atualiza a conta vinculada
     // @@unique([fk_id_usuario, plataforma]) no schema habilita isso
@@ -93,6 +104,7 @@ try {
       },
       update: {
         acess_token:  access_token,
+        token_expires_at: expiraEm,
         account_id:   adAccountId,
         vinculado_em: new Date(),
       },
@@ -100,23 +112,24 @@ try {
         fk_id_usuario: parseInt(userId),
         plataforma:    'meta',
         acess_token:   access_token,
+        token_expires_at: expiraEm,
         account_id:    adAccountId,
       },
     });
 
     console.log(`[META] Conta vinculada. Usuário: ${userId} | Account: ${adAccountId}`);
-    return res.redirect(`${env.frontendUrl}/app/meta?meta=conectado`);
+    return res.redirect(`${env.frontendUrl}/app/account?meta=conectado`);
 
   } catch (err) {
     if (err.code === 'SEM_CONTA') {
-      return res.redirect(`${env.frontendUrl}/app/meta?meta=sem-conta`);
+      return res.redirect(`${env.frontendUrl}/app/account?meta=sem-conta`);
     }
-    console.error('[META] Erro no callback:', err.message);
+    console.error('[META] Erro no callback:');
     if (err.response?.data?.error) {
       const { mensagem } = metaService.extrairErroMeta(err);
-      console.error('[META] Erro Graph API:', mensagem);
+      console.error('[META] Erro Graph API:');
     }
-    return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
+    return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
   }
 }
 
@@ -126,19 +139,21 @@ export async function status(req, res) {
   try {
     const conta = await prisma.contas_vinculadas.findFirst({
       where:  { fk_id_usuario: req.usuario.id, plataforma: 'meta' },
-      select: { pk_id_conta: true, account_id: true, vinculado_em: true },
+      select: { pk_id_conta: true, account_id: true, vinculado_em: true, account_name: true, currency: true, token_expires_at: true },
       // Nunca retornamos acess_token ao front
     });
 
-    if (!conta) return res.status(200).json({ conectado: false });
+    if (!conta) return res.status(200).json({ conectado: false, configured: Boolean(env.meta.appId && env.meta.appSecret && env.meta.redirectUri) });
 
     return res.status(200).json({
       conectado:    true,
+      configured: Boolean(env.meta.appId && env.meta.appSecret && env.meta.redirectUri),
       account_id:   conta.account_id,
+      account_name: conta.account_name, currency: conta.currency, token_expires_at: conta.token_expires_at,
       vinculado_em: conta.vinculado_em,
     });
   } catch (err) {
-    console.error('[META] Erro ao verificar status:', err.message);
+    console.error('[META] Erro ao verificar status:');
     return res.status(500).json({ erro: 'Erro ao verificar conexão com o Meta.' });
   }
 }
@@ -161,7 +176,7 @@ export async function listarCampanhas(req, res) {
       campanhasApi = await metaService.buscarCampanhas(conta.account_id, conta.acess_token);
     } catch (err) {
       const { mensagem, codigo } = metaService.extrairErroMeta(err);
-      if (codigo === 190) return res.status(401).json({ erro: mensagem, acao: 'reconectar' });
+      if (codigo === 190) return res.status(409).json({ erro: mensagem, acao: 'reconectar' });
       return res.status(502).json({ erro: mensagem });
     }
 
@@ -199,7 +214,7 @@ export async function listarCampanhas(req, res) {
       sincronizado: new Date().toISOString(),
     });
   } catch (err) {
-    console.error('[META] Erro ao listar campanhas:', err.message);
+    console.error('[META] Erro ao listar campanhas:');
     return res.status(500).json({ erro: 'Erro interno ao buscar campanhas.' });
   }
 }
@@ -208,7 +223,9 @@ export async function listarCampanhas(req, res) {
 // Busca métricas de uma campanha e salva na tabela metricas.
 export async function buscarInsightsCampanha(req, res) {
   const { id }      = req.params;
-  const { periodo } = req.query;
+  const result = insightPeriodSchema.safeParse(req.query.periodo);
+  if (!result.success) return res.status(400).json({ erro: 'Período inválido.' });
+  const periodo = result.data;
 
   try {
     const conta = await prisma.contas_vinculadas.findFirst({
@@ -220,7 +237,7 @@ export async function buscarInsightsCampanha(req, res) {
     const campanha = await prisma.campanhas.findFirst({
       where: {
         id_externo: id,
-        conta: { fk_id_usuario: req.usuario.id },
+        fk_id_conta: conta.pk_id_conta,
       },
     });
     if (!campanha) return res.status(404).json({ erro: 'Campanha não encontrada.' });
@@ -231,29 +248,17 @@ export async function buscarInsightsCampanha(req, res) {
       insights = await metaService.buscarInsights(id, conta.acess_token, periodo);
     } catch (err) {
       const { mensagem, codigo } = metaService.extrairErroMeta(err);
-      if (codigo === 190) return res.status(401).json({ erro: mensagem, acao: 'reconectar' });
+      if (codigo === 190) return res.status(409).json({ erro: mensagem, acao: 'reconectar' });
       return res.status(502).json({ erro: mensagem });
     }
 
     if (!insights) {
+      await saveMetrics(campanha.pk_id_campanha, periodo, { impressions: 0, clicks: 0, spend: 0, reach: 0, conversions: 0, revenue: 0, ctr: 0, cpc: 0, cpm: 0, frequency: 0 });
       return res.status(200).json({ mensagem: 'Sem dados para o período informado.', insights: null });
     }
 
-    // Salva métricas no banco
-    // periodo_metrica é String no banco real — usamos a string do período
-    const periodoStr      = periodo || 'last_30d';
-    const camposIgnorados = ['date_start', 'date_stop'];
-
-    const registros = Object.entries(insights)
-      .filter(([chave]) => !camposIgnorados.includes(chave))
-      .map(([tipo, valor]) => ({
-        fk_id_campanha:  campanha.pk_id_campanha,
-        tipo_metrica:    tipo,
-        valor_metrica:   parseFloat(valor) || 0,
-        periodo_metrica: periodoStr,
-      }));
-
-    await prisma.metricas.createMany({ data: registros, skipDuplicates: true });
+    const periodoStr = periodo || 'last_30d';
+    await saveMetrics(campanha.pk_id_campanha, periodoStr, insights);
 
     return res.status(200).json({
       campanha_id: id,
@@ -261,7 +266,7 @@ export async function buscarInsightsCampanha(req, res) {
       insights,
     });
   } catch (err) {
-    console.error('[META] Erro ao buscar insights:', err.message);
+    console.error('[META] Erro ao buscar insights:');
     return res.status(500).json({ erro: 'Erro interno ao buscar insights.' });
   }
 }
@@ -279,13 +284,15 @@ export async function desconectar(req, res) {
 
     return res.status(200).json({ mensagem: 'Conta Meta desvinculada com sucesso.' });
   } catch (err) {
-    console.error('[META] Erro ao desconectar:', err.message);
+    console.error('[META] Erro ao desconectar:');
     return res.status(500).json({ erro: 'Erro ao desconectar conta Meta.' });
   }
 }
 // metaController.js
 export async function resumoInsights(req, res) {
-  const { periodo = 'last_30d' } = req.query;
+  const result = insightPeriodSchema.safeParse(req.query.periodo);
+  if (!result.success) return res.status(400).json({ erro: 'Período inválido.' });
+  const periodo = result.data;
 
   try {
     const conta = await prisma.contas_vinculadas.findFirst({
@@ -298,30 +305,33 @@ export async function resumoInsights(req, res) {
       select: { pk_id_campanha: true, id_externo: true },
     });
 
-    const resultados = await Promise.allSettled(
-      campanhas.map(c => metaService.buscarInsights(c.id_externo, conta.acess_token, periodo))
-    );
-
-    const totais = { impressions: 0, clicks: 0, spend: 0, reach: 0, ctr: 0, cpm: 0, frequency: 0 };
-    let count = 0;
-    for (const r of resultados) {
-      if (r.status === 'fulfilled' && r.value) {
-        totais.impressions += parseFloat(r.value.impressions || 0);
-        totais.clicks      += parseFloat(r.value.clicks || 0);
-        totais.spend       += parseFloat(r.value.spend || 0);
-        totais.reach       += parseFloat(r.value.reach || 0);
-        totais.ctr         += parseFloat(r.value.ctr || 0);
-        totais.cpm         += parseFloat(r.value.cpm || 0);
-        totais.frequency   += parseFloat(r.value.frequency || 0);
-        count++;
-      }
+    const results = [];
+    for (let index = 0; index < campanhas.length; index += 4) {
+      const batch = await Promise.all(campanhas.slice(index, index + 4).map(async campaign => {
+        const insights = await metaService.buscarInsights(campaign.id_externo, conta.acess_token, periodo);
+        // An empty period must clear the previous snapshot rather than retain stale totals.
+        const values = insights || { impressions: 0, clicks: 0, spend: 0, reach: 0, conversions: 0, revenue: 0, ctr: 0, cpc: 0, cpm: 0, frequency: 0 };
+        await saveMetrics(campaign.pk_id_campanha, periodo, values);
+        return { id: campaign.id_externo, campaignId: campaign.pk_id_campanha, insights: values, hasData: Boolean(insights) };
+      }));
+      results.push(...batch);
     }
-    if (count > 0) { totais.ctr /= count; totais.cpm /= count; totais.frequency /= count; }
-
-    return res.status(200).json({ periodo, totais, campanhas_com_dados: count });
+    const rows = results.flatMap(result => Object.entries(result.insights)
+      .filter(([type]) => !['date_start', 'date_stop'].includes(type))
+      .map(([type, value]) => ({ fk_id_campanha: result.campaignId, periodo_metrica: periodo, tipo_metrica: type, valor_metrica: value })));
+    const totais = summarizeMetrics(rows);
+    return res.status(200).json({
+      periodo, totais,
+      campanhas_com_dados: results.filter(result => result.hasData).length,
+      campanhas: results.map(result => ({ id: result.id, insights: result.insights })),
+    });
 
   } catch (err) {
-    console.error('[META] Erro ao buscar resumo:', err.message);
+    if (err.response) {
+      const { mensagem, codigo } = metaService.extrairErroMeta(err);
+      return res.status(codigo === 190 ? 409 : 502).json({ erro: mensagem, ...(codigo === 190 ? { acao: 'reconectar' } : {}) });
+    }
+    console.error('[META] Erro ao buscar resumo:');
     return res.status(500).json({ erro: 'Erro interno ao buscar resumo.' });
   }
 }

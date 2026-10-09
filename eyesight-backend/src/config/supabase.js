@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import env from './env.js';
 
-console.log('[SUPABASE] URL:', env.supabase.url);
-console.log('[SUPABASE] URL válida:', /^https:\/\/.+\.supabase\.co\/?$/.test(env.supabase.url));
+export function createAuthClient() {
+  return createClient(env.supabase.url, env.supabase.anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
 
-export const supabase = createClient(
-  env.supabase.url,
-  env.supabase.anonKey
-);
+export const supabase = createAuthClient();

@@ -5,7 +5,15 @@
 import { Resend } from 'resend';
 import env from '../config/env.js';
 
-const resend = env.resend.apiKey ? new Resend(env.resend.apiKey) : null;
+let client;
+// Cliente criado sob demanda; `setResendClient` existe para os testes trocarem o cliente real por um falso.
+function getResend() {
+  if (client === undefined) client = env.resend.apiKey ? new Resend(env.resend.apiKey) : null;
+  return client;
+}
+export function setResendClient(value) {
+  client = value;
+}
 
 function montarHtmlVerificacao({ nome, link }) {
   return `
@@ -40,6 +48,7 @@ function montarHtmlVerificacao({ nome, link }) {
 }
 
 export async function enviarEmailVerificacao({ email, nome, token }) {
+  const resend = getResend();
   if (!resend) {
     throw new Error('RESEND_API_KEY não configurada.');
   }
@@ -55,5 +64,20 @@ export async function enviarEmailVerificacao({ email, nome, token }) {
 
   if (error) {
     throw new Error(error.message || 'Falha ao enviar e-mail de verificação.');
+  }
+}
+
+// Resumo semanal. `unsubscribePostUrl` (endpoint público do backend) habilita o cancelamento com um clique.
+export async function enviarResumoSemanal({ to, subject, html, text, unsubscribeUrl, unsubscribePostUrl }) {
+  const resend = getResend();
+  if (!resend) {
+    throw new Error('RESEND_API_KEY não configurada.');
+  }
+  const headers = unsubscribePostUrl
+    ? { 'List-Unsubscribe': `<${unsubscribePostUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+    : { 'List-Unsubscribe': `<${unsubscribeUrl}>` };
+  const { error } = await resend.emails.send({ from: env.resend.from, to, subject, html, text, headers });
+  if (error) {
+    throw new Error(error.message || 'Falha ao enviar o resumo semanal.');
   }
 }

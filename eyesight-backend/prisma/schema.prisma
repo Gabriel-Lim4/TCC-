@@ -13,7 +13,13 @@ model usuarios {
   nome_usuario      String              @db.VarChar(100)
   data_criacao_user DateTime?           @default(now())
   auth_user_id      String?             @unique @db.Uuid
+  telefone          String?             @db.VarChar(30)
+  localizacao       String?             @db.VarChar(150)
+  preferences       Json?
+  conversations     assistant_conversations[]
   analises          analises_ia[]
+  planos            planos_acao[]
+  rotinas           rotina_envios[]
   contas            contas_vinculadas[]
 }
 
@@ -23,6 +29,11 @@ model contas_vinculadas {
   plataforma    contas_vinculadas_plataforma
   acess_token   String
   account_id    String                       @db.VarChar(100)
+  refresh_token String?
+  token_expires_at DateTime?
+  account_name  String?                      @db.VarChar(200)
+  currency      String?                      @db.VarChar(3)
+  time_zone     String?                      @db.VarChar(100)
   vinculado_em  DateTime?                    @default(now())
   campanhas     campanhas[]
   usuario       usuarios                     @relation(fields: [fk_id_usuario], references: [pk_id_usuario], onDelete: Cascade)
@@ -42,6 +53,7 @@ model campanhas {
   analises        analises_ia[]
   conta           contas_vinculadas @relation(fields: [fk_id_conta], references: [pk_id_conta], onDelete: Cascade)
   metricas        metricas[]
+  daily_metrics   campaign_daily_metrics[]
 
   @@unique([fk_id_conta, id_externo])
   @@index([fk_id_conta])
@@ -65,6 +77,9 @@ model analises_ia {
   fk_id_campanha       Int
   texto_analise        String?
   sugestao_analise     String?
+  score_desempenho     Int?
+  modelo              String?
+  periodo             String?   @db.VarChar(50)
   data_geracao_analise DateTime? @default(now())
   campanha             campanhas @relation(fields: [fk_id_campanha], references: [pk_id_campanha], onDelete: Cascade)
   usuario              usuarios  @relation(fields: [fk_id_usuario], references: [pk_id_usuario], onDelete: Cascade)
@@ -75,5 +90,56 @@ model analises_ia {
 
 enum contas_vinculadas_plataforma {
   meta
-  tiktok
+  google
+}
+
+model campaign_daily_metrics {
+  id          Int       @id @default(autoincrement())
+  campaign_id Int
+  date        DateTime  @db.Date
+  values      Json
+  synced_at   DateTime  @default(now())
+  campaign    campanhas @relation(fields: [campaign_id], references: [pk_id_campanha], onDelete: Cascade)
+
+  @@unique([campaign_id, date])
+  @@index([date])
+}
+
+model assistant_conversations {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    Int
+  title      String   @db.VarChar(150)
+  messages   Json
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  user       usuarios @relation(fields: [user_id], references: [pk_id_usuario], onDelete: Cascade)
+
+  @@index([user_id, updated_at])
+}
+
+model planos_acao {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     Int
+  action_key  String   @db.VarChar(80)
+  action_code String   @db.VarChar(50)
+  campaign_id Int?
+  steps       Json
+  generated_at DateTime @default(now()) @db.Timestamptz(6)
+  last_seen_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user        usuarios @relation(fields: [user_id], references: [pk_id_usuario], onDelete: Cascade)
+
+  @@unique([user_id, action_key])
+  @@index([user_id, last_seen_at])
+}
+
+model rotina_envios {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    Int
+  kind       String   @db.VarChar(30)
+  period_key String   @db.VarChar(10)
+  sent_at    DateTime @default(now()) @db.Timestamptz(6)
+  user       usuarios @relation(fields: [user_id], references: [pk_id_usuario], onDelete: Cascade)
+
+  @@unique([user_id, kind, period_key])
 }

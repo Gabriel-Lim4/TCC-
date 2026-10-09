@@ -12,8 +12,17 @@
 
 import axios from 'axios';
 import { prisma }   from '../config/database.js';
-import { supabase } from '../config/supabase.js';
+import { createAuthClient } from '../config/supabase.js';
 import env          from '../config/env.js';
+import {
+  cadastroSchema,
+  loginSchema,
+  redefinirSenhaSchema,
+  esqueciSenhaSchema,
+  atualizarPerfilSchema,
+  alterarSenhaSchema,
+  refreshSchema,
+} from '../validators/authValidator.js';
 
 const URL_CONFIRMACAO = `${env.frontendUrl}/verificar-email`;
 const URL_REDEFINICAO = `${env.frontendUrl}/redefinir-senha`;
@@ -21,23 +30,32 @@ const URL_REDEFINICAO = `${env.frontendUrl}/redefinir-senha`;
 const eRateLimit = (error) =>
   error?.status === 429 || error?.code === 'over_email_send_rate_limit';
 
+const SIGNUP_REPLY = {
+  mensagem: 'Se o e-mail puder ser cadastrado, você receberá as instruções de confirmação.',
+  requerVerificacao: true,
+};
+
 const MSG_RATE_LIMIT = 'Muitos e-mails enviados em pouco tempo. Aguarde alguns minutos e tente novamente.';
 
 // ── POST /auth/cadastro ──────────────────────────────────────
 export async function cadastro(req, res) {
-  const { nome, email, senha } = req.body;
+  const result = cadastroSchema.safeParse(req.body);
 
-  if (!nome || !email || !senha)
-    return res.status(400).json({ erro: 'Campos obrigatórios: nome, email, senha.' });
+  if (!result.success) {
+    const errors = result.error.issues.map(err => ({
+      path: err.path.join('.'),
+      message: err.message,
+    }));
+    return res.status(400).json({
+      erro: 'Dados inválidos.',
+      detalhes: errors,
+    });
+  }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    return res.status(400).json({ erro: 'Formato de email inválido.' });
-
-  if (senha.length < 6)
-    return res.status(400).json({ erro: 'A senha deve ter no mínimo 6 caracteres.' });
+  const { nome, email, senha } = result.data;
 
   try {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await createAuthClient().auth.signUp({
       email,
       password: senha,
       options: {
@@ -47,13 +65,13 @@ export async function cadastro(req, res) {
     });
 
     if (error) {
-      console.error('[AUTH] Erro no cadastro Supabase:', error.code || error.message);
+      console.error('[AUTH] Erro no cadastro Supabase:');
 
       if (eRateLimit(error))
         return res.status(429).json({ erro: MSG_RATE_LIMIT });
 
       if (error.message.toLowerCase().includes('already registered'))
-        return res.status(409).json({ erro: 'Este email já está cadastrado.' });
+        return res.status(201).json(SIGNUP_REPLY);
 
       return res.status(400).json({ erro: error.message });
     }
@@ -61,34 +79,57 @@ export async function cadastro(req, res) {
     // Com confirmação de e-mail ativa, o Supabase NÃO retorna erro para e-mail
     // já cadastrado: devolve um user com identities vazio (anti-enumeração).
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0)
-      return res.status(409).json({ erro: 'Este email já está cadastrado.' });
+      return res.status(201).json(SIGNUP_REPLY);
 
-    return res.status(201).json({
-      mensagem: 'Cadastro realizado. Verifique seu e-mail para confirmar a conta.',
-      requerVerificacao: true,
-      usuario: { id: data.user?.id, nome, email: data.user?.email },
-    });
+    // Cria o perfil na tabela local de usuários
+    if (data.user) {
+      try {
+        await prisma.usuarios.create({
+          data: {
+            nome_usuario: nome,
+            auth_user_id: data.user.id,
+          },
+        });
+      } catch (err) {
+        // Se já existe (race condition), ignora
+        if (err.code !== 'P2002') {
+          console.error('[AUTH] Erro ao criar perfil local:');
+        }
+      }
+    }
+
+    return res.status(201).json(SIGNUP_REPLY);
   } catch (err) {
-    console.error('[AUTH] Erro no cadastro:', err.message);
+    console.error('[AUTH] Erro no cadastro:');
     return res.status(500).json({ erro: 'Erro interno no servidor.' });
   }
 }
 
 // ── POST /auth/login ─────────────────────────────────────────
 export async function login(req, res) {
-  const { email, senha } = req.body;
+  const result = loginSchema.safeParse(req.body);
 
-  if (!email || !senha)
-    return res.status(400).json({ erro: 'Campos obrigatórios: email, senha.' });
+  if (!result.success) {
+    const errors = result.error.issues.map(err => ({
+      path: err.path.join('.'),
+      message: err.message,
+    }));
+    return res.status(400).json({
+      erro: 'Dados inválidos.',
+      detalhes: errors,
+    });
+  }
+
+  const { email, senha } = result.data;
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await createAuthClient().auth.signInWithPassword({
       email,
       password: senha,
     });
 
     if (error) {
-      console.error('[AUTH] Erro no login Supabase:', error.code || error.message);
+      console.error('[AUTH] Erro no login Supabase:');
 
       // O front já trata requerVerificacao (mostra "Reenviar e-mail")
       if (error.code === 'email_not_confirmed') {
@@ -107,7 +148,7 @@ export async function login(req, res) {
 
     const usuario = await prisma.usuarios.findUnique({
       where:  { auth_user_id: data.user.id },
-      select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true },
+      select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true, telefone: true, localizacao: true, preferences: true },
     });
 
     if (!usuario)
@@ -116,20 +157,21 @@ export async function login(req, res) {
     return res.status(200).json({
       mensagem: 'Login realizado com sucesso.',
       token: data.session.access_token,
-      usuario: { id: usuario.pk_id_usuario, nome: usuario.nome_usuario, email: data.user.email },
+      refreshToken: data.session.refresh_token,
+      expiresAt: data.session.expires_at,
+      usuario: { id: usuario.pk_id_usuario, nome: usuario.nome_usuario, email: data.user.email, preferences: usuario.preferences || {} },
     });
   } catch (err) {
-    console.error('[AUTH] Erro no login:', err.message);
+    console.error('[AUTH] Erro no login:');
     return res.status(500).json({ erro: 'Erro interno no servidor.' });
   }
 }
 
 // ── POST /auth/reenviar-verificacao ──────────────────────────
 export async function reenviarVerificacao(req, res) {
-  const { email } = req.body;
-
-  if (!email)
-    return res.status(400).json({ erro: 'Informe o e-mail para reenviar a confirmação.' });
+  const result = esqueciSenhaSchema.safeParse(req.body);
+  if (!result.success) return res.status(400).json({ erro: 'Informe um e-mail válido.' });
+  const { email } = result.data;
 
   // Resposta genérica para evitar enumeração de usuários
   const respostaGenerica = {
@@ -137,48 +179,58 @@ export async function reenviarVerificacao(req, res) {
   };
 
   try {
-    const { error } = await supabase.auth.resend({
+    const { error } = await createAuthClient().auth.resend({
       type: 'signup',
       email,
       options: { emailRedirectTo: URL_CONFIRMACAO },
     });
 
     if (error) {
-      console.error('[AUTH] Erro ao reenviar confirmação:', error.code || error.message);
+      console.error('[AUTH] Erro ao reenviar confirmação:');
       if (eRateLimit(error)) return res.status(429).json({ erro: MSG_RATE_LIMIT });
     }
 
     return res.status(200).json(respostaGenerica);
   } catch (err) {
-    console.error('[AUTH] Erro ao reenviar confirmação:', err.message);
+    console.error('[AUTH] Erro ao reenviar confirmação:');
     return res.status(500).json({ erro: 'Erro interno no servidor.' });
   }
 }
 
 // ── POST /auth/esqueci-senha ─────────────────────────────────
 export async function esqueciSenha(req, res) {
-  const { email } = req.body;
+  const result = esqueciSenhaSchema.safeParse(req.body);
 
-  if (!email)
-    return res.status(400).json({ erro: 'Informe seu e-mail.' });
+  if (!result.success) {
+    const errors = result.error.issues.map(err => ({
+      path: err.path.join('.'),
+      message: err.message,
+    }));
+    return res.status(400).json({
+      erro: 'Dados inválidos.',
+      detalhes: errors,
+    });
+  }
+
+  const { email } = result.data;
 
   const respostaGenerica = {
     mensagem: 'Se o e-mail estiver cadastrado, enviamos um link para redefinir a senha.',
   };
 
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await createAuthClient().auth.resetPasswordForEmail(email, {
       redirectTo: URL_REDEFINICAO,
     });
 
     if (error) {
-      console.error('[AUTH] Erro ao enviar redefinição:', error.code || error.message);
+      console.error('[AUTH] Erro ao enviar redefinição:');
       if (eRateLimit(error)) return res.status(429).json({ erro: MSG_RATE_LIMIT });
     }
 
     return res.status(200).json(respostaGenerica);
   } catch (err) {
-    console.error('[AUTH] Erro ao enviar redefinição:', err.message);
+    console.error('[AUTH] Erro ao enviar redefinição:');
     return res.status(500).json({ erro: 'Erro interno no servidor.' });
   }
 }
@@ -187,10 +239,20 @@ export async function esqueciSenha(req, res) {
 // O front recebe o access_token de recuperação no hash da URL (#access_token=...)
 // e o reenvia aqui junto com a nova senha.
 export async function redefinirSenha(req, res) {
-  const { accessToken, novaSenha } = req.body;
+  const result = redefinirSenhaSchema.safeParse(req.body);
 
-  if (!accessToken || !novaSenha)
-    return res.status(400).json({ erro: 'Campos obrigatórios: accessToken, novaSenha.' });
+  if (!result.success) {
+    const errors = result.error.issues.map(err => ({
+      path: err.path.join('.'),
+      message: err.message,
+    }));
+    return res.status(400).json({
+      erro: 'Dados inválidos.',
+      detalhes: errors,
+    });
+  }
+
+  const { accessToken, novaSenha } = result.data;
 
   if (novaSenha.length < 6)
     return res.status(400).json({ erro: 'A senha deve ter no mínimo 6 caracteres.' });
@@ -210,7 +272,7 @@ export async function redefinirSenha(req, res) {
     return res.status(200).json({ mensagem: 'Senha redefinida com sucesso.' });
   } catch (err) {
     const status = err.response?.status;
-    console.error('[AUTH] Erro ao redefinir senha:', err.response?.data?.msg || err.message);
+    console.error('[AUTH] Erro ao redefinir senha:');
 
     // 400 (não 401) para o front não tratar como sessão expirada
     if (status === 401 || status === 403)
@@ -228,7 +290,7 @@ export async function me(req, res) {
   try {
     const usuario = await prisma.usuarios.findUnique({
       where:  { auth_user_id: req.usuario.auth_user_id },
-      select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true },
+      select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true, telefone: true, localizacao: true, preferences: true },
     });
 
     if (!usuario)
@@ -240,10 +302,107 @@ export async function me(req, res) {
         nome:       usuario.nome_usuario,
         authUserId: usuario.auth_user_id,
         email:      req.usuario.email,
+        telefone: usuario.telefone || "",
+        localizacao: usuario.localizacao || "",
+        preferences: usuario.preferences || {},
       },
     });
   } catch (err) {
-    console.error('[AUTH] Erro ao buscar usuário:', err);
+    console.error('[AUTH] Erro ao buscar usuário:');
     return res.status(500).json({ erro: 'Erro ao buscar usuário.' });
+  }
+}
+
+// ── PUT /auth/me ─────────────────────────────────────────────
+export async function atualizarPerfil(req, res) {
+  const result = atualizarPerfilSchema.safeParse(req.body);
+  if (!result.success) return res.status(400).json({ erro: 'Nome inválido.', detalhes: result.error.issues });
+  const { nome, telefone, localizacao, preferences } = result.data;
+
+  try {
+    const current = preferences ? await prisma.usuarios.findUnique({ where: { auth_user_id: req.usuario.auth_user_id }, select: { preferences: true } }) : null;
+    const usuario = await prisma.usuarios.update({
+      where:  { auth_user_id: req.usuario.auth_user_id },
+      data:   { nome_usuario: nome.trim(), telefone, localizacao, ...(preferences ? { preferences: { ...current?.preferences, ...preferences } } : {}) },
+      select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true, telefone: true, localizacao: true, preferences: true },
+    });
+
+    return res.status(200).json({
+      mensagem: 'Perfil atualizado com sucesso.',
+      usuario: {
+        id:         usuario.pk_id_usuario,
+        nome:       usuario.nome_usuario,
+        authUserId: usuario.auth_user_id,
+        email:      req.usuario.email,
+        telefone: usuario.telefone || "",
+        localizacao: usuario.localizacao || "",
+        preferences: usuario.preferences || {},
+      },
+    });
+  } catch (err) {
+    console.error('[AUTH] Erro ao atualizar perfil:');
+    return res.status(500).json({ erro: 'Erro ao atualizar perfil.' });
+  }
+}
+// ── GET /auth/me/contas ────────────────────────────────────
+// Retorna as plataformas vinculadas ao usuário logado.
+export async function minhasContas(req, res) {
+  try {
+    const contas = await prisma.contas_vinculadas.findMany({
+      where:  { fk_id_usuario: req.usuario.id },
+      select: {
+        plataforma:   true,
+        account_id:   true,
+        vinculado_em: true,
+      },
+      orderBy: { vinculado_em: 'asc' },
+    });
+
+    return res.status(200).json({ contas });
+  } catch (err) {
+    console.error('[AUTH] Erro ao buscar contas vinculadas:');
+    return res.status(500).json({ erro: 'Erro ao buscar contas vinculadas.' });
+  }
+}
+
+export async function refresh(req, res) {
+  const result = refreshSchema.safeParse(req.body);
+  if (!result.success) return res.status(400).json({ erro: 'Token de renovação inválido.' });
+  try {
+    const { data, error } = await createAuthClient().auth.refreshSession({ refresh_token: result.data.refreshToken });
+    if (error || !data.session) return res.status(error?.status >= 500 || error?.name === 'AuthRetryableFetchError' ? 503 : 401).json({ erro: 'Não foi possível renovar a sessão.' });
+    return res.json({ token: data.session.access_token, refreshToken: data.session.refresh_token, expiresAt: data.session.expires_at });
+  } catch {
+    return res.status(503).json({ erro: 'Autenticação indisponível. Tente novamente.' });
+  }
+}
+
+export async function logout(req, res) {
+  try {
+    const { error } = await createAuthClient().auth.admin.signOut(req.headers.authorization.slice(7), 'local');
+    if (error && ![401, 403, 404].includes(error.status)) return res.status(503).json({ erro: 'Não foi possível encerrar a sessão no servidor. Tente novamente.' });
+    return res.json({ mensagem: 'Sessão encerrada.' });
+  } catch {
+    return res.status(503).json({ erro: 'Não foi possível encerrar a sessão. Tente novamente.' });
+  }
+}
+
+export async function alterarSenha(req, res) {
+  const result = alterarSenhaSchema.safeParse(req.body);
+  if (!result.success) return res.status(400).json({ erro: 'Informe a senha atual e uma nova senha de 8 a 256 caracteres.' });
+  if (result.data.senhaAtual === result.data.novaSenha) return res.status(400).json({ erro: 'Escolha uma senha diferente da atual.' });
+  const client = createAuthClient();
+  try {
+    const { data, error } = await client.auth.signInWithPassword({ email: req.usuario.email, password: result.data.senhaAtual });
+    if (error || data.user?.id !== req.usuario.auth_user_id) return res.status(400).json({ erro: 'Senha atual incorreta.' });
+    try {
+      const updated = await client.auth.updateUser({ password: result.data.novaSenha });
+      if (updated.error) return res.status(400).json({ erro: 'Não foi possível alterar a senha. Verifique a política de segurança da conta.' });
+      return res.json({ mensagem: 'Senha alterada. Use a nova senha no próximo acesso.' });
+    } finally {
+      await client.auth.signOut({ scope: 'local' });
+    }
+  } catch {
+    return res.status(503).json({ erro: 'Não foi possível alterar a senha. Tente novamente.' });
   }
 }

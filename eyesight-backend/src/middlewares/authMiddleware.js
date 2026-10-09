@@ -43,6 +43,9 @@ export default async (req, res, next) => {
       error
     } = await supabase.auth.getUser(token);
 
+    if (error?.status >= 500 || error?.name === 'AuthRetryableFetchError') {
+      return res.status(503).json({ erro: 'Autenticação temporariamente indisponível. Tente novamente.' });
+    }
     if (error || !user) {
       return res.status(401).json({
         erro: 'Token inválido ou expirado.'
@@ -79,7 +82,7 @@ export default async (req, res, next) => {
     next();
 
   } catch (err) {
-    console.error('[AUTH MIDDLEWARE] Erro inesperado:', err);
+    console.error('[Auth] Falha ao validar sessão.');
 
     return res.status(500).json({
       erro: 'Erro interno na autenticação. Tente novamente.'

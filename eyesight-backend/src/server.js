@@ -2,30 +2,48 @@
 // server.js — ponto de entrada da aplicação
 // ─────────────────────────────────────────────────────────────
 
-import env                from './config/env.js';
-import express            from 'express';
-import cors               from 'cors';
+import env            from './config/env.js';
+import express        from 'express';
+import cors           from 'cors';
+import helmet         from 'helmet';
 import { testConnection } from './config/database.js';
-import authRoutes         from './routes/authRoutes.js';
-import metaRoutes         from './routes/metaRoutes.js';
+import { health } from './controllers/healthController.js';
+import errorHandler, { notFoundHandler } from './error/error.js';
+import authRoutes     from './routes/authRoutes.js';
+import metaRoutes     from './routes/metaRoutes.js';
+import googleRoutes   from './routes/googleRoutes.js';
+import metricasRoutes from './routes/metricasRoutes.js';
+import iaRoutes       from './routes/iaRoutes.js';
+import jobsRoutes     from './routes/jobsRoutes.js';
+import resumoRoutes   from './routes/resumoRoutes.js';
+import instagramRoutes from './routes/instagramRoutes.js';
 
 const app = express();
+// Render terminates connections at its reverse proxy. Trust only the nearest hop,
+// never arbitrary client-supplied forwarding chains. Local deployments remain direct.
+if (process.env.RENDER === 'true') app.set('trust proxy', 1);
 
 app.use(cors());
+app.use(helmet());
 app.use(express.json());
 
-app.use('/auth', authRoutes);
-app.use('/meta', metaRoutes);
+app.use('/auth',       authRoutes);
+app.use('/meta',       metaRoutes);
+app.use('/google',     googleRoutes);
+app.use('/instagram',  instagramRoutes);
+app.use('/metricas',   metricasRoutes);
+app.use('/ia',         iaRoutes);
+app.use('/jobs',       jobsRoutes);
+app.use('/resumo',     resumoRoutes);
 
-// Health check — usado pelo Railway para saber que o serviço está vivo
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', env: env.app.nodeEnv, hora: new Date().toISOString() });
-});
+// Health check also reaches PostgreSQL for the scheduled keepalive.
+app.get('/health', health);
 
 // 404 — rota não encontrada
-app.use((req, res) => {
-  res.status(404).json({ erro: `Rota '${req.path}' não encontrada.` });
-});
+app.use(notFoundHandler);
+
+// Middleware de tratamento de erros (deve ser o último middleware)
+app.use(errorHandler);
 
 async function start() {
   await testConnection();
@@ -37,12 +55,21 @@ async function start() {
     console.log('[SERVER]    POST   /auth/redefinir-senha');
     console.log('[SERVER]    POST   /auth/reenviar-verificacao');
     console.log('[SERVER]    GET    /auth/me');
+    console.log('[SERVER]    PUT    /auth/me');
     console.log('[SERVER]    GET    /meta/conectar');
     console.log('[SERVER]    GET    /meta/callback     ← pública');
     console.log('[SERVER]    GET    /meta/status');
     console.log('[SERVER]    GET    /meta/campanhas');
     console.log('[SERVER]    GET    /meta/campanhas/:id/insights');
     console.log('[SERVER]    DELETE /meta/desconectar');
+    console.log('[SERVER]    GET    /metricas/campanhas');
+    console.log('[SERVER]    GET    /metricas/campanhas/:id');
+    console.log('[SERVER]    GET    /metricas/geral');
+    console.log('[SERVER]    GET    /metricas/exportar');
+    console.log('[SERVER]    POST   /ia/analisar/:campanhaId');
+    console.log('[SERVER]    GET    /ia/analises');
+    console.log('[SERVER]    GET    /ia/analises/:id');
+    console.log('[SERVER]    DELETE /ia/analises/:id');
     console.log('[SERVER]    GET    /health\n');
   });
 }
