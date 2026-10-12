@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { weekKey, weekdayOf } from '../services/routineClock.js';
+import { dayKey, weekKey, weekdayOf } from '../services/routineClock.js';
 
 test('weekdayOf counts Monday as 1 in the configured time zone', () => {
   assert.equal(weekdayOf(new Date('2026-10-05T12:00:00Z')), 1);
@@ -25,4 +25,10 @@ test('weekKey follows ISO rules around the new year', () => {
   assert.equal(weekKey(new Date('2026-12-31T12:00:00Z')), '2026-W53');
   assert.equal(weekKey(new Date('2027-01-01T12:00:00Z')), '2026-W53');
   assert.equal(weekKey(new Date('2027-01-04T12:00:00Z')), '2027-W01');
+});
+
+test('dayKey is the local calendar date, not the UTC date', () => {
+  assert.equal(dayKey(new Date('2026-10-05T12:00:00Z')), '2026-10-05');
+  assert.equal(dayKey(new Date('2026-10-05T02:00:00Z')), '2026-10-04');
+  assert.equal(dayKey(new Date('2026-10-05T02:00:00Z'), 'UTC'), '2026-10-05');
 });

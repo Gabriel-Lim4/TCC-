@@ -3,6 +3,7 @@ import { resolveDateRange } from './dateRange.js';
 import { latestMetrics } from './metricsSummary.js';
 import { aggregateValues, metricChanges } from './analyticsMath.js';
 import { buildVerdict } from './verdictService.js';
+import { explainCostChange } from './changeExplainer.js';
 
 const dateKey = value => new Date(value).toISOString().slice(0, 10);
 const accountCurrency = campaign => campaign.conta.currency || 'UNKNOWN';
@@ -91,5 +92,10 @@ export async function getAnalytics(userId, query = {}) {
   // O veredito é um resumo opcional: se falhar, o restante da resposta continua válido.
   let verdict = null;
   try { verdict = buildVerdict(result); } catch { verdict = null; }
-  return { ...result, verdict };
+  // Idem para "por que mudou?": só existe com os dois períodos completos e fatores medidos.
+  let changeExplanation = null;
+  try {
+    if (verdict && currentComplete && previousComplete) changeExplanation = explainCostChange(totals, previousTotals, verdict.indicator);
+  } catch { changeExplanation = null; }
+  return { ...result, verdict, changeExplanation };
 }

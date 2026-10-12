@@ -2,7 +2,7 @@ import test, { beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 const realIa = await import('../services/iaService.js');
-const store = { plans: [], calls: [], lockRows: true };
+const store = { plans: [], calls: [], lockRows: true, daily: () => [] };
 let analyticsImpl;
 let limitImpl;
 let stepsImpl;
@@ -26,6 +26,7 @@ const prisma = {
     },
     update: async ({ where, data }) => { store.calls.push(['update', where, data]); const plan = store.plans.find(item => item.id === where.id); return Object.assign(plan, data); },
   },
+  campaign_daily_metrics: { findMany: async query => { store.calls.push(['daily', query]); return store.daily(query); } },
   $queryRaw: async (...args) => { store.calls.push(['lock']); const plan = store.plans.find(item => item.id === args[1] && item.user_id === args[2]); return plan ? [{ id: plan.id }] : []; },
   $transaction: async fn => fn(prisma),
 };
@@ -45,7 +46,7 @@ const ACTION = { code: 'campaign_over_goal', campaignId: 7 };
 const plan = overrides => ({ id: ID, user_id: 7, action_key: 'campaign_over_goal:7', action_code: 'campaign_over_goal', campaign_id: 7, steps: [{ id: 's1', text: 'Um', done: false }, { id: 's2', text: 'Dois', done: false }, { id: 's3', text: 'Três', done: false }], generated_at: new Date(), last_seen_at: new Date(), ...overrides });
 
 beforeEach(() => {
-  store.plans = []; store.calls = []; analyticsCalls.length = 0; aiCalls.length = 0;
+  store.plans = []; store.calls = []; store.daily = () => []; analyticsCalls.length = 0; aiCalls.length = 0;
   analyticsImpl = async () => analytics();
   limitImpl = async (_id, action) => action();
   stepsImpl = async () => ({ passos: ['Abra o gerenciador', 'Reduza o orçamento', 'Revise o público'] });
@@ -159,4 +160,48 @@ test('PATCH answers 404 for foreign plans, bad ids and unknown steps, and 400 fo
   assert.equal((await run(controller.marcarPasso, { params: { id: 'not-a-uuid', stepId: 's1' }, body: { done: true } })).code, 404);
   assert.equal((await run(controller.marcarPasso, { params: { id: ID, stepId: 's9' }, body: { done: true } })).code, 404);
   assert.equal((await run(controller.marcarPasso, { params: { id: ID, stepId: 's1' }, body: { done: 'sim' } })).code, 400);
+});
+
+test('PATCH grava doneAt ao concluir e remove ao desmarcar', async () => {
+  store.plans.push(plan());
+  const done = await run(controller.marcarPasso, { params: { id: ID, stepId: 's2' }, body: { done: true } });
+  assert.ok(Number.isFinite(Date.parse(done.body.plano.steps[1].doneAt)));
+  assert.equal(done.body.plano.steps[0].doneAt, undefined);
+  const back = await run(controller.marcarPasso, { params: { id: ID, stepId: 's2' }, body: { done: false } });
+  assert.equal('doneAt' in back.body.plano.steps[1], false);
+});
+
+const doneToday = () => [{ id: 's1', text: 'Um', done: true, doneAt: new Date(Date.now() - 6 * DAY).toISOString() }, { id: 's2', text: 'Dois', done: false }, { id: 's3', text: 'Três', done: false }];
+const dayRows = (offsetFrom, offsetTo, values) => {
+  const rows = [];
+  for (let offset = offsetFrom; offset >= offsetTo; offset--) rows.push({ campaign_id: 7, date: new Date(new Date(Date.now() - offset * DAY).toISOString().slice(0, 10) + 'T00:00:00Z'), values });
+  return rows;
+};
+
+test('GET devolve followUp pronto para o plano com passo concluído, consultando só as campanhas do plano', async () => {
+  store.plans.push(plan({ steps: doneToday() }));
+  store.daily = () => [...dayRows(13, 8, { impressions: 5000, clicks: 100, spend: 200, conversions: 4 }), ...dayRows(5, 1, { impressions: 5000, clicks: 100, spend: 200, conversions: 5 })];
+  const res = await run(controller.listarPlanos, {});
+  const followUp = res.body.planos[0].followUp;
+  assert.equal(followUp.status, 'ready');
+  assert.equal(followUp.result, 'better');
+  const query = store.calls.find(call => call[0] === 'daily')[1];
+  assert.deepEqual(query.where.campaign_id.in, [7]);
+});
+
+test('GET sem passo concluído não consulta métricas nem devolve followUp', async () => {
+  store.plans.push(plan());
+  const res = await run(controller.listarPlanos, {});
+  assert.equal(res.body.planos[0].followUp, null);
+  assert.equal(store.calls.some(call => call[0] === 'daily'), false);
+});
+
+test('GET usa as campanhas do recorte para plano de conta e sobrevive a falha na consulta', async () => {
+  analyticsImpl = async () => analytics({ campaigns: [{ id: 7, name: 'Promo' }, { id: 8, name: 'Outra' }], verdict: { ...verdict(), actions: [{ code: 'budget_exceeded', params: { spend: 1, limit: 1 } }] } });
+  store.plans.push(plan({ id: '44444444-4444-4444-8444-444444444444', action_key: 'budget_exceeded:-', action_code: 'budget_exceeded', campaign_id: null, steps: doneToday() }));
+  store.daily = () => { throw new Error('banco indisponível'); };
+  const res = await run(controller.listarPlanos, {});
+  assert.equal(res.code, undefined);
+  assert.equal(res.body.planos[0].followUp, null);
+  assert.deepEqual(store.calls.find(call => call[0] === 'daily')[1].where.campaign_id.in, [7, 8]);
 });

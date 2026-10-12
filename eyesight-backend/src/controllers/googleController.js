@@ -4,6 +4,7 @@
 // Orquestra o fluxo OAuth do Google Ads e as chamadas de dados.
 // ────────────────────────────────────────────────────────────
 
+import { sealToken } from '../services/tokenVault.js';
 import { prisma } from '../config/database.js';
 import * as googleService from '../services/googleService.js';
 import env from '../config/env.js';
@@ -100,18 +101,18 @@ export async function callbackGoogle(req, res) {
         },
       },
       update: {
-        acess_token:  accessToken,
+        acess_token:  sealToken(accessToken),
         account_id:   customerId,
-        ...(refreshToken ? { refresh_token: refreshToken } : {}),
+        ...(refreshToken ? { refresh_token: sealToken(refreshToken) } : {}),
         token_expires_at: new Date(Date.now() + Number(tokenData.expires_in || 3600) * 1000),
         vinculado_em: new Date(),
       },
       create: {
         fk_id_usuario: parseInt(userId),
         plataforma:    'google',
-        acess_token:   accessToken,
+        acess_token:   sealToken(accessToken),
         account_id:    customerId,
-        ...(refreshToken ? { refresh_token: refreshToken } : {}),
+        ...(refreshToken ? { refresh_token: sealToken(refreshToken) } : {}),
         token_expires_at: new Date(Date.now() + Number(tokenData.expires_in || 3600) * 1000),
       },
     });

@@ -75,3 +75,28 @@ test('an insufficient verdict explains what is missing', () => {
   const { html } = make(analytics(verdict('insufficient', { insufficientReason: 'low_volume' })));
   assert.ok(html.includes('Poucos dados para avaliar ainda.'));
 });
+
+test('the alert variant changes subject, opening, reason and unsubscribe label, keeping the verdict body', () => {
+  const alertUrl = 'https://app.example.com/cancelar-resumo?t=abc&e=alertas';
+  const data = analytics(verdict('attention'));
+  const mail = buildSummaryEmail({ name: 'Ana', analytics: data, appUrl: 'https://app.example.com', unsubscribeUrl: alertUrl, variant: 'alert' });
+  assert.equal(mail.subject, 'Seus anúncios passaram a pedir atenção');
+  for (const part of [mail.html, mail.text]) {
+    assert.match(part, /mudaram de estado desde a última verificação/);
+    assert.match(part, /ligou os alertas no Eyesight/);
+    assert.match(part, /Parar de receber alertas/);
+    assert.doesNotMatch(part, /ligou o resumo semanal/);
+    assert.match(part, /O que fazer agora/);
+  }
+  assert.ok(mail.html.includes('e=alertas'));
+  const weekly = make(data);
+  assert.match(weekly.html, /Parar de receber</);
+  assert.doesNotMatch(weekly.html, /mudaram de estado/);
+});
+
+test('o e-mail também descreve o gasto sem resultado', async () => {
+  const { actionText, headline } = await import('../services/summaryCopy.js');
+  const params = { spend: 800, goal: 40 };
+  assert.equal(actionText({ code: 'spend_without_results', params }, 'BRL').replace(/\s/g, ' '), 'Seus anúncios gastaram R$ 800,00 sem nenhum resultado. Confira o acompanhamento de conversões e pause o que não está funcionando.');
+  assert.equal(headline({ status: 'attention', basis: 'comparison', reasons: [{ code: 'spend_without_results', params }] }, { period: 'last_7d', days: 7 }), 'Atenção: você está gastando sem ter resultados.');
+});

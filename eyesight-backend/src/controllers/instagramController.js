@@ -1,4 +1,5 @@
 import { prisma } from '../config/database.js';
+import { openToken, sealToken } from '../services/tokenVault.js';
 import { graphList, extrairErroMeta } from '../services/metaService.js';
 import { resolveDateRange } from '../services/dateRange.js';
 import axios from 'axios';
@@ -12,11 +13,12 @@ async function findInstagram(userId) {
   });
   if (!account) return { reason: 'conta_meta_nao_vinculada' };
   // Instagram Business is linked to a Facebook Page, not to the /me user node.
-  const pages = await graphList('me/accounts', account.acess_token, {
+  const token = openToken(account.acess_token);
+  const pages = await graphList('me/accounts', token, {
     fields: 'id,instagram_business_account{id,username}',
   });
   const instagram = pages.find(page => page.instagram_business_account)?.instagram_business_account;
-  return instagram ? { instagram, token: account.acess_token } : { reason: 'sem_conta_instagram' };
+  return instagram ? { instagram, token } : { reason: 'sem_conta_instagram' };
 }
 
 function sendError(res, error) {

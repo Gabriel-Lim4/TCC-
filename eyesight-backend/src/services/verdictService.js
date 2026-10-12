@@ -12,13 +12,15 @@ export const LIMITS = {
   NAME_MAX: 80,
 };
 
-export const REASON_CODES = ['cost_within_goal', 'cost_above_goal', 'cost_better', 'cost_worse', 'cost_stable', 'budget_exceeded', 'budget_near', 'ctr_below_min', 'no_conversion_tracking', 'no_results_yet'];
-export const ACTION_CODES = ['budget_exceeded', 'campaign_over_goal', 'campaign_low_ctr', 'campaign_without_results', 'enable_conversion_tracking', 'refresh_data', 'nothing_urgent'];
+export const REASON_CODES = ['cost_within_goal', 'cost_above_goal', 'cost_better', 'cost_worse', 'cost_stable', 'budget_exceeded', 'budget_near', 'spend_without_results', 'ctr_below_min', 'no_conversion_tracking', 'no_results_yet'];
+export const ACTION_CODES = ['budget_exceeded', 'spend_without_results', 'campaign_over_goal', 'campaign_low_ctr', 'campaign_without_results', 'enable_conversion_tracking', 'refresh_data', 'nothing_urgent'];
 
 const isNumber = value => typeof value === 'number' && Number.isFinite(value);
 const positive = value => Number(value) > 0;
 const moneyKnown = analytics => analytics.currency !== 'UNKNOWN';
-const ATTENTION_RANK = { budget_exceeded: 0, cost_above_goal: 1, cost_worse: 2, ctr_below_min: 3 };
+// Gasto sem nenhum resultado só vira alerta quando passa deste múltiplo da meta de custo por resultado.
+export const SPEND_WITHOUT_RESULTS_GOAL_MULTIPLE = 2;
+const ATTENTION_RANK = { budget_exceeded: 0, spend_without_results: 1, cost_above_goal: 1, cost_worse: 2, ctr_below_min: 3 };
 
 function assertShape(analytics) {
   if (!analytics || typeof analytics !== 'object' || !analytics.totals || !analytics.period) {
@@ -46,6 +48,15 @@ function budgetSignals(analytics) {
     return { attention: [], warning: [{ code: 'budget_near', params: { spend: totals.spend, limit, percent: Math.round(ratio * 100) } }] };
   }
   return { attention: [], warning: [] };
+}
+
+// Conversões medidas e zeradas com gasto claramente acima da meta: o custo por clique pode parecer bom enquanto o dinheiro some.
+function spendWithoutResultsSignal(analytics) {
+  const { totals, alertSettings } = analytics;
+  const goal = Number(alertSettings?.cpaMax);
+  if (!positive(goal) || !moneyKnown(analytics) || !analytics.currentComplete || totals.conversions !== 0) return [];
+  if (!(totals.spend >= SPEND_WITHOUT_RESULTS_GOAL_MULTIPLE * goal)) return [];
+  return [{ code: 'spend_without_results', params: { spend: totals.spend, goal } }];
 }
 
 function ctrSignal(analytics) {
@@ -141,11 +152,12 @@ function isStale(lastSyncedAt, now) {
   return !Number.isFinite(time) || now.getTime() - time > LIMITS.STALE_HOURS * 3600000;
 }
 
-function buildActions(analytics, budgetSignal, now) {
+function buildActions(analytics, budgetSignal, noResultsSignal, now) {
   const [over, lowCtr, wasted] = ['campaign_over_goal', 'campaign_low_ctr', 'campaign_without_results']
     .map(code => campaignActions(analytics).find(action => action.code === code));
   const candidates = [
     budgetSignal[0] && { code: 'budget_exceeded', params: budgetSignal[0].params },
+    noResultsSignal[0] && { code: 'spend_without_results', params: noResultsSignal[0].params },
     over, lowCtr, wasted,
     analytics.currentComplete && analytics.totals.conversions == null && { code: 'enable_conversion_tracking', params: {} },
     analytics.hasData && isStale(analytics.lastSyncedAt, now) && { code: 'refresh_data', params: { lastSyncedAt: analytics.lastSyncedAt ?? null } },
@@ -163,7 +175,8 @@ export function buildVerdict(analytics, { now = new Date() } = {}) {
   const indicator = pickIndicator(analytics.totals);
   const evaluation = evaluateIndicator(analytics, indicator);
   const budget = budgetSignals(analytics);
-  const signals = [...budget.attention, ...ctrSignal(analytics)];
+  const noResults = spendWithoutResultsSignal(analytics);
+  const signals = [...budget.attention, ...noResults, ...ctrSignal(analytics)];
   const attention = signals.length > 0 || evaluation.status === 'attention';
   const status = attention ? 'attention' : evaluation.status;
   return {
@@ -173,6 +186,6 @@ export function buildVerdict(analytics, { now = new Date() } = {}) {
     insufficientReason: status === 'insufficient' ? evaluation.insufficientReason : null,
     reasons: byPriority([...signals, ...evaluation.reasons, ...budget.warning, ...indicatorNotes(analytics.totals)]),
     highlights: buildHighlights(analytics, indicator),
-    actions: buildActions(analytics, budget.attention, now),
+    actions: buildActions(analytics, budget.attention, noResults, now),
   };
 }

@@ -304,3 +304,34 @@ describe('actions', () => {
     assert.equal(actions.find(action => action.code === 'campaign_over_goal').params.campaign, html);
   });
 });
+
+describe('spend without results', () => {
+  const none = { conversions: 0, cpa: null };
+  const goal = { alertSettings: { cpaMax: 40 } };
+  const spending = (spend, extra = {}) => build({ totals: { ...none, spend }, ...goal, ...extra });
+
+  it('flags attention when conversions are tracked, zero, and spend is at least twice the goal', () => {
+    const verdict = spending(80);
+    assert.equal(verdict.status, 'attention');
+    assert.deepEqual(verdict.reasons.find(reason => reason.code === 'spend_without_results'), { code: 'spend_without_results', params: { spend: 80, goal: 40 } });
+    assert.deepEqual(verdict.actions.find(action => action.code === 'spend_without_results'), { code: 'spend_without_results', params: { spend: 80, goal: 40 } });
+  });
+
+  it('puts it ahead of the softer reasons', () => {
+    assert.equal(spending(500).reasons[0].code, 'spend_without_results');
+  });
+
+  it('stays quiet below twice the goal', () => {
+    const verdict = spending(79.99);
+    assert.ok(!codes(verdict).includes('spend_without_results'));
+    assert.ok(!verdict.actions.some(action => action.code === 'spend_without_results'));
+  });
+
+  it('needs a goal, a known currency, a complete period and tracked conversions', () => {
+    assert.ok(!codes(build({ totals: { ...none, spend: 900 } })).includes('spend_without_results'));
+    assert.ok(!codes(spending(900, { currency: 'UNKNOWN' })).includes('spend_without_results'));
+    assert.ok(!codes(spending(900, { currentComplete: false })).includes('spend_without_results'));
+    assert.ok(!codes(build({ totals: { spend: 900, conversions: null, cpa: null }, ...goal })).includes('spend_without_results'));
+    assert.ok(!codes(build({ totals: { spend: 900, conversions: 3, cpa: 300 }, ...goal })).includes('spend_without_results'));
+  });
+});

@@ -72,7 +72,7 @@ test('a valid token turns off only that user\'s summary and keeps the other pref
   assert.equal(res.code, undefined);
   assert.equal(writes.length, 1);
   assert.deepEqual(writes[0].values, [7]);
-  assert.match(writes[0].sql, /UPDATE usuarios SET preferences = COALESCE\(preferences, '\{\}'::jsonb\) \|\| jsonb_build_object\('summary', jsonb_build_object\('weekly', false\)\) WHERE pk_id_usuario = \?/);
+  assert.match(writes[0].sql, /UPDATE usuarios SET preferences = COALESCE\(preferences, '\{\}'::jsonb\) \|\| jsonb_build_object\('summary', COALESCE\(preferences->'summary', '\{\}'::jsonb\) \|\| jsonb_build_object\('weekly', false\)\) WHERE pk_id_usuario = \?/);
 });
 
 test('the token may also arrive in the query (one-click header), and cancelling twice is harmless', async () => {
@@ -100,4 +100,22 @@ test('only the test route needs a session; cancelling is public; both are rate l
   assert.ok(!routes['/cancelar'].includes(fakeAuth));
   assert.equal(routes['/teste'].length, 3);
   assert.equal(routes['/cancelar'].length, 2);
+});
+
+test('the alerts scope turns off only the alerts and keeps the weekly choice (body or query)', async () => {
+  const token = createUnsubscribeToken(9, { secret: SECRET });
+  assert.equal((await run(cancelar, { body: { token, escopo: 'alertas' }, query: {} })).code, undefined);
+  assert.equal((await run(cancelar, { query: { t: token, e: 'alertas' } })).code, undefined);
+  assert.equal(writes.length, 2);
+  for (const write of writes) {
+    assert.deepEqual(write.values, [9]);
+    assert.match(write.sql, /COALESCE\(preferences->'summary', '\{\}'::jsonb\) \|\| jsonb_build_object\('alerts', false\)/);
+    assert.doesNotMatch(write.sql, /'weekly'/);
+  }
+});
+
+test('an unknown scope falls back to the weekly summary', async () => {
+  const token = createUnsubscribeToken(9, { secret: SECRET });
+  await run(cancelar, { body: { token, escopo: 'outro' }, query: {} });
+  assert.match(writes[0].sql, /'weekly', false/);
 });

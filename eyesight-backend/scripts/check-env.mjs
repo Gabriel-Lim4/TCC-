@@ -18,4 +18,6 @@ for (const [name, keys, effect] of GROUPS) {
   missing += empty.length;
   console.log(`${empty.length ? '✗' : '✓'} ${name}${empty.length ? `\n    vazias: ${empty.join(', ')}\n    efeito: ${effect}` : ''}`);
 }
+const encryption = String(process.env.TOKEN_ENCRYPTION_KEY ?? '').trim();
+console.log(`${encryption ? '✓' : '·'} Criptografia dos tokens das contas de anúncio (opcional)${encryption ? '' : '\n    TOKEN_ENCRYPTION_KEY vazia: os tokens seguem gravados em texto. Para ligar, gere 32 bytes aleatórios em base64.'}`);
 console.log(missing ? `\n${missing} variável(is) vazia(s).` : '\nTudo preenchido.');

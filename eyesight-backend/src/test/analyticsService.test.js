@@ -106,3 +106,20 @@ test('analytics adds a verdict without changing the existing fields', async () =
     assert.ok(field in result, `${field} must still be present`);
   }
 });
+
+test('analytics explains why the cost changed using the verdict indicator', async () => {
+  campaigns = [makeCampaign(1)];
+  const day = (date, spend) => ({ campaign_id: 1, date, values: { impressions: 5000, clicks: 100, spend, conversions: 5 } });
+  dailyRows = [day('2026-08-30', 200), day('2026-08-31', 200), day('2026-09-01', 150), day('2026-09-02', 150)];
+  const result = await getAnalytics(55, query);
+  assert.equal(result.changeExplanation.indicator, result.verdict.indicator);
+  assert.equal(result.changeExplanation.main, 'cpm');
+  assert.ok(Math.abs(result.changeExplanation.costChange + 25) < 1e-9);
+});
+
+test('analytics leaves changeExplanation empty when there is nothing comparable to explain', async () => {
+  campaigns = [makeCampaign(1)];
+  dailyRows = [{ campaign_id: 1, date: '2026-09-01', values: { impressions: 5000, clicks: 100, spend: 10, conversions: 5 } }];
+  const result = await getAnalytics(55, query);
+  assert.equal(result.changeExplanation, null);
+});

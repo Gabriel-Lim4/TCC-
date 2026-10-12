@@ -27,6 +27,9 @@ function makeDeps(overrides = {}) {
     getAnalytics: async (userId, query) => { calls.analytics.push([userId, query]); return analytics(); },
     findEmail: async authUserId => `${authUserId}@example.com`,
     send: async message => { calls.sent.push(message); },
+    listAlertUsers: async () => [],
+    lastState: async () => null,
+    lastAlertAt: async () => null,
     unsubscribeSecret: SECRET, frontendUrl: 'https://app.example.com', backendUrl: 'https://api.example.com',
     ...overrides,
   };
@@ -170,4 +173,120 @@ test('the summary phase has its own time budget and reports who was left for the
     assert.equal(result.sent, 1);
     assert.ok(lines.some(line => line.includes('1')), lines.join('|'));
   } finally { spy.mock.restore(); }
+});
+
+// ---- alertas por mudança de estado (etapa 2) ----
+const attention = () => analytics({ verdict: { ...analytics().verdict, status: 'attention', actions: [{ code: 'nothing_urgent', params: {} }] } });
+const DAY_MS = 86400000;
+
+function alertDeps({ prev = { state: 'ok' }, lastAlert = null, getAnalytics = async () => attention(), ...rest } = {}) {
+  const base = makeDeps({
+    listAlertUsers: async () => [{ id: 1, name: 'Ana', authUserId: 'u1' }],
+    lastState: async () => prev,
+    lastAlertAt: async () => lastAlert,
+    getAnalytics,
+    listOptedInUsers: async () => [],
+    ...rest,
+  });
+  return base;
+}
+
+test('alert: sends once when the state changes from ok to attention, with the alert variant', async () => {
+  const { deps, calls } = alertDeps();
+  const result = await runDailyRoutine({ now: THURSDAY, deps });
+  assert.equal(calls.sent.length, 1);
+  assert.equal(result.alerts, 1);
+  assert.deepEqual(calls.claim.map(([, kind]) => kind), ['alert_attention', 'state_attention']);
+  assert.equal(calls.claim[0][2], '2026-10-08');
+  assert.match(calls.sent[0].subject, /passaram a pedir atenção/);
+  assert.ok(new URL(calls.sent[0].unsubscribeUrl).searchParams.get('e') === 'alertas');
+  assert.ok(calls.sent[0].unsubscribePostUrl.endsWith('&e=alertas'));
+});
+
+test('alert: no e-mail when attention continues, ok continues or attention recovers', async () => {
+  for (const [prev, getAnalytics] of [[{ state: 'attention' }, async () => attention()], [{ state: 'ok' }, async () => analytics()], [{ state: 'attention' }, async () => analytics()]]) {
+    const { deps, calls } = alertDeps({ prev, getAnalytics });
+    await runDailyRoutine({ now: THURSDAY, deps });
+    assert.equal(calls.sent.length, 0);
+    assert.equal(calls.claim.length, 1);
+  }
+});
+
+test('alert: the first observation only records the state', async () => {
+  const { deps, calls } = alertDeps({ prev: null });
+  await runDailyRoutine({ now: THURSDAY, deps });
+  assert.equal(calls.sent.length, 0);
+  assert.deepEqual(calls.claim.map(([, kind]) => kind), ['state_attention']);
+});
+
+test('alert: waits at least 3 days after the previous alert', async () => {
+  const recent = alertDeps({ lastAlert: new Date(THURSDAY.getTime() - 2 * DAY_MS) });
+  await runDailyRoutine({ now: THURSDAY, deps: recent.deps });
+  assert.equal(recent.calls.sent.length, 0);
+  const old = alertDeps({ lastAlert: new Date(THURSDAY.getTime() - 3 * DAY_MS) });
+  await runDailyRoutine({ now: THURSDAY, deps: old.deps });
+  assert.equal(old.calls.sent.length, 1);
+});
+
+test('alert: runs only once a day (state already recorded today)', async () => {
+  const { deps, calls } = alertDeps({ claim: async (...args) => { calls.claim.push(args); return false; } });
+  await runDailyRoutine({ now: THURSDAY, deps });
+  assert.equal(calls.sent.length, 0);
+});
+
+test('alert: skips users without data, verdict or an assessable state, recording nothing', async () => {
+  const insufficient = analytics({ verdict: { ...analytics().verdict, status: 'insufficient', insufficientReason: 'no_data' } });
+  for (const getAnalytics of [async () => analytics({ hasData: false }), async () => analytics({ verdict: null }), async () => insufficient]) {
+    const { deps, calls } = alertDeps({ getAnalytics });
+    await runDailyRoutine({ now: THURSDAY, deps });
+    assert.equal(calls.sent.length, 0);
+    assert.equal(calls.claim.length, 0);
+  }
+});
+
+test('alert: a failed send releases the alert and never records the state, and the run continues', async () => {
+  const { deps, calls } = alertDeps({ listAlertUsers: async () => [{ id: 1, name: 'Ana', authUserId: 'u1' }, { id: 2, name: 'Bia', authUserId: 'u2' }] });
+  let first = true;
+  deps.send = async message => { if (first) { first = false; throw new Error('boom'); } calls.sent.push(message); };
+  const result = await runDailyRoutine({ now: THURSDAY, deps });
+  assert.deepEqual(calls.release, [[1, 'alert_attention', '2026-10-08']]);
+  assert.ok(!calls.claim.some(([id, kind]) => id === 1 && kind === 'state_attention'));
+  assert.equal(calls.sent.length, 1);
+  assert.equal(result.errors, 1);
+});
+
+test('alert: skipped when the weekly summary was just sent to the same user', async () => {
+  const { deps, calls } = alertDeps({ listOptedInUsers: async () => [{ id: 1, name: 'Ana', authUserId: 'u1' }] });
+  const result = await runDailyRoutine({ now: MONDAY, deps });
+  assert.equal(calls.sent.length, 1);
+  assert.match(calls.sent[0].subject, /resumo|semana/i);
+  assert.equal(result.alerts, 0);
+  assert.ok(calls.claim.some(([, kind]) => kind === 'state_attention'));
+});
+
+test('alert: no e-mail and no state without the unsubscribe secret', async () => {
+  const { deps, calls } = alertDeps({ unsubscribeSecret: '' });
+  await runDailyRoutine({ now: THURSDAY, deps });
+  assert.equal(calls.sent.length, 0);
+  assert.equal(calls.claim.length, 0);
+});
+
+test('alert: a state older than 7 days is not a baseline (re-enabling after a long pause only records)', async () => {
+  const { deps, calls } = alertDeps({ prev: { state: 'ok', at: new Date(THURSDAY.getTime() - 60 * DAY_MS) } });
+  await runDailyRoutine({ now: THURSDAY, deps });
+  assert.equal(calls.sent.length, 0);
+  assert.deepEqual(calls.claim.map(([, kind]) => kind), ['state_attention']);
+  const fresh = alertDeps({ prev: { state: 'ok', at: new Date(THURSDAY.getTime() - 1 * DAY_MS) } });
+  await runDailyRoutine({ now: THURSDAY, deps: fresh.deps });
+  assert.equal(fresh.calls.sent.length, 1);
+});
+
+test('alert: a release that fails is logged, not silent', async () => {
+  const { deps } = alertDeps({ release: async () => { throw new Error('db down'); } });
+  deps.send = async () => { throw new Error('boom'); };
+  const logged = [];
+  const spy = mock.method(console, 'error', (...args) => { logged.push(args.join(' ')); });
+  await runDailyRoutine({ now: THURSDAY, deps });
+  spy.mock.restore();
+  assert.ok(logged.some(line => /liberar/.test(line)));
 });

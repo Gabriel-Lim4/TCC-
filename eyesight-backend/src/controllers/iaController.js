@@ -5,7 +5,8 @@ import { complete, aiError, SYSTEM_PROMPT, compactAnalytics, gerarPassos } from 
 import { campaignAnalysis, withAiLimit } from '../services/aiWorkflow.js';
 import { buildExplainContext, parseFocus } from '../services/explainContext.js';
 import { analyticsQuery, numericId } from '../services/aiScope.js';
-import { PLAN_ACTION_CODES, actionKey, findCurrentAction, parsePlanAction, planIdentity, validateSteps } from '../services/planService.js';
+import { FOLLOW_UP_METRICS, PLAN_ACTION_CODES, actionKey, evaluateFollowUp, findCurrentAction, followUpFrom, markStep, parsePlanAction, planIdentity, validateSteps } from '../services/planService.js';
+import { dayKey } from '../services/routineClock.js';
 
 const conversationId = value => {
   if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw aiError('Conversa inválida.');
@@ -90,7 +91,30 @@ export async function chat(req, res) {
 
 const PLAN_TTL_MS = 30 * 86400000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const planView = row => ({ id: row.id, actionKey: row.action_key, actionCode: row.action_code, campaignId: row.campaign_id, steps: row.steps, generatedAt: row.generated_at });
+const planView = (row, followUp = null) => ({ id: row.id, actionKey: row.action_key, actionCode: row.action_code, campaignId: row.campaign_id, steps: row.steps, generatedAt: row.generated_at, followUp });
+
+// Acompanhamento é um extra: qualquer falha aqui deixa o plano sem followUp, nunca derruba a lista.
+async function followUpsFor(plans, analytics) {
+  const result = new Map();
+  const tracked = plans.filter(plan => FOLLOW_UP_METRICS[plan.action_code] && followUpFrom(plan.steps));
+  if (!tracked.length) return result;
+  try {
+    const today = dayKey(new Date());
+    const idsOf = plan => (plan.campaign_id != null ? [plan.campaign_id] : (analytics.campaigns || []).map(campaign => campaign.id));
+    const ids = [...new Set(tracked.flatMap(idsOf))];
+    if (!ids.length) return result;
+    const from = tracked.map(plan => followUpFrom(plan.steps)).sort()[0];
+    const rows = await prisma.campaign_daily_metrics.findMany({
+      where: { campaign_id: { in: ids }, date: { gte: new Date(`${from}T00:00:00Z`), lte: new Date(`${today}T00:00:00Z`) } },
+      orderBy: { date: 'asc' },
+    });
+    for (const plan of tracked) {
+      const own = idsOf(plan);
+      result.set(plan.id, evaluateFollowUp({ actionCode: plan.action_code, steps: plan.steps, rows: rows.filter(row => own.includes(row.campaign_id)), today }));
+    }
+  } catch { result.clear(); }
+  return result;
+}
 const planKey = (userId, key) => ({ user_id_action_key: { user_id: userId, action_key: key } });
 
 export async function listarPlanos(req, res) {
@@ -101,7 +125,8 @@ export async function listarPlanos(req, res) {
     const keys = (analytics.verdict?.actions || []).filter(action => PLAN_ACTION_CODES.includes(action.code)).map(action => actionKey(planIdentity(action)));
     const plans = keys.length ? await prisma.planos_acao.findMany({ where: { user_id: userId, action_key: { in: keys } } }) : [];
     if (plans.length) await prisma.planos_acao.updateMany({ where: { user_id: userId, id: { in: plans.map(plan => plan.id) } }, data: { last_seen_at: new Date() } });
-    res.json({ planos: plans.map(planView) });
+    const followUps = await followUpsFor(plans, analytics);
+    res.json({ planos: plans.map(plan => planView(plan, followUps.get(plan.id) ?? null)) });
   } catch (err) { failure(res, err); }
 }
 
@@ -148,7 +173,7 @@ export async function marcarPasso(req, res) {
       if (!locked.length) throw aiError('Plano não encontrado.', 404);
       const current = await tx.planos_acao.findUnique({ where: { id } });
       if (!current.steps.some(step => step.id === stepId)) throw aiError('Passo não encontrado.', 404);
-      return tx.planos_acao.update({ where: { id }, data: { steps: current.steps.map(step => (step.id === stepId ? { ...step, done } : step)) } });
+      return tx.planos_acao.update({ where: { id }, data: { steps: markStep(current.steps, stepId, done) } });
     });
     res.json({ plano: planView(saved) });
   } catch (err) { failure(res, err); }

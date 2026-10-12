@@ -39,7 +39,7 @@ export async function syncAnalytics(req, res) {
         const result = await sync(userId, { ...range, since: range.previousSince });
         results.push({ platform: account.plataforma, success: true, ...result });
       } catch (error) {
-        const reconnect = error.code === 'RECONNECT_REQUIRED' || error.response?.status === 401;
+        const reconnect = error.code === 'RECONNECT_REQUIRED' || error.code === 'TOKEN_DECRYPT_FAILED' || error.response?.status === 401;
         results.push({ platform: account.plataforma, success: false, error: reconnect ? 'Reconecte sua conta para continuar.' : 'Não foi possível sincronizar esta plataforma. Confira a conexão e tente novamente.' });
       }
     }

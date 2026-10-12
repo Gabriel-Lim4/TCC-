@@ -26,6 +26,7 @@ const shortDate = value => new Date(value).toLocaleDateString('pt-BR', { day: '2
 
 const ACTIONS = {
   budget_exceeded: (p, c) => `Você já gastou ${money(p.spend, c)}, acima do seu limite de ${money(p.limit, c)}.`,
+  spend_without_results: (p, c) => `Seus anúncios gastaram ${money(p.spend, c)} sem nenhum resultado. Confira o acompanhamento de conversões e pause o que não está funcionando.`,
   campaign_over_goal: (p, c) => `A campanha '${p.campaign}' está custando ${money(p.value, c)} por resultado, acima da sua meta de ${money(p.goal, c)}.`,
   campaign_low_ctr: p => `Poucas pessoas clicam na campanha '${p.campaign}' (${percent(p.ctr)}; sua meta é ${percent(p.min)}).`,
   campaign_without_results: (p, c) => `A campanha '${p.campaign}' gastou ${money(p.spend, c)} e não gerou resultados.`,
@@ -48,6 +49,7 @@ const INSUFFICIENT = {
 
 const ATTENTION = [
   ['budget_exceeded', () => 'Atenção: você passou do seu limite de gasto.'],
+  ['spend_without_results', () => 'Atenção: você está gastando sem ter resultados.'],
   ['cost_above_goal', () => 'Atenção: o custo por resultado está acima da sua meta.'],
   ['cost_worse', period => `Atenção: seus anúncios pioraram em relação ${previousLabelTo(period)}.`],
   ['ctr_below_min', () => 'Atenção: poucas pessoas estão clicando nos seus anúncios.'],

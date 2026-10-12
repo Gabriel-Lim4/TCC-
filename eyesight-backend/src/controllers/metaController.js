@@ -5,6 +5,7 @@
 // Usa o schema Prisma corrigido com @@unique e @unique.
 // ─────────────────────────────────────────────────────────────
 
+import { openToken, sealToken } from '../services/tokenVault.js';
 import { prisma }       from '../config/database.js';
 import * as metaService from '../services/metaService.js';
 import env              from '../config/env.js';
@@ -103,7 +104,7 @@ try {
         },
       },
       update: {
-        acess_token:  access_token,
+        acess_token:  sealToken(access_token),
         token_expires_at: expiraEm,
         account_id:   adAccountId,
         vinculado_em: new Date(),
@@ -111,7 +112,7 @@ try {
       create: {
         fk_id_usuario: parseInt(userId),
         plataforma:    'meta',
-        acess_token:   access_token,
+        acess_token:   sealToken(access_token),
         token_expires_at: expiraEm,
         account_id:    adAccountId,
       },
@@ -173,7 +174,7 @@ export async function listarCampanhas(req, res) {
     // Busca na Graph API
     let campanhasApi;
     try {
-      campanhasApi = await metaService.buscarCampanhas(conta.account_id, conta.acess_token);
+      campanhasApi = await metaService.buscarCampanhas(conta.account_id, openToken(conta.acess_token));
     } catch (err) {
       const { mensagem, codigo } = metaService.extrairErroMeta(err);
       if (codigo === 190) return res.status(409).json({ erro: mensagem, acao: 'reconectar' });
@@ -245,7 +246,7 @@ export async function buscarInsightsCampanha(req, res) {
     // Busca insights na Graph API
     let insights;
     try {
-      insights = await metaService.buscarInsights(id, conta.acess_token, periodo);
+      insights = await metaService.buscarInsights(id, openToken(conta.acess_token), periodo);
     } catch (err) {
       const { mensagem, codigo } = metaService.extrairErroMeta(err);
       if (codigo === 190) return res.status(409).json({ erro: mensagem, acao: 'reconectar' });
@@ -308,7 +309,7 @@ export async function resumoInsights(req, res) {
     const results = [];
     for (let index = 0; index < campanhas.length; index += 4) {
       const batch = await Promise.all(campanhas.slice(index, index + 4).map(async campaign => {
-        const insights = await metaService.buscarInsights(campaign.id_externo, conta.acess_token, periodo);
+        const insights = await metaService.buscarInsights(campaign.id_externo, openToken(conta.acess_token), periodo);
         // An empty period must clear the previous snapshot rather than retain stale totals.
         const values = insights || { impressions: 0, clicks: 0, spend: 0, reach: 0, conversions: 0, revenue: 0, ctr: 0, cpc: 0, cpm: 0, frequency: 0 };
         await saveMetrics(campaign.pk_id_campanha, periodo, values);

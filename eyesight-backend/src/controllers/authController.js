@@ -323,7 +323,7 @@ export async function atualizarPerfil(req, res) {
     const current = preferences ? await prisma.usuarios.findUnique({ where: { auth_user_id: req.usuario.auth_user_id }, select: { preferences: true } }) : null;
     const usuario = await prisma.usuarios.update({
       where:  { auth_user_id: req.usuario.auth_user_id },
-      data:   { nome_usuario: nome.trim(), telefone, localizacao, ...(preferences ? { preferences: { ...current?.preferences, ...preferences } } : {}) },
+      data:   { nome_usuario: nome.trim(), telefone, localizacao, ...(preferences ? { preferences: { ...current?.preferences, ...preferences, ...(preferences.summary ? { summary: { ...current?.preferences?.summary, ...preferences.summary } } : {}) } } : {}) },
       select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true, telefone: true, localizacao: true, preferences: true },
     });
 

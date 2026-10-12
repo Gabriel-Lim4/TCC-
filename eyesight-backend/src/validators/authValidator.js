@@ -31,7 +31,8 @@ export const atualizarPerfilSchema = z.object({
   preferences: z.object({
     theme: z.enum(["light", "dark"]).optional(),
     onboarding: z.object({ dismissed: z.boolean() }).strict().optional(),
-    summary: z.object({ weekly: z.boolean() }).strict().optional(),
+    summary: z.object({ weekly: z.boolean().optional(), alerts: z.boolean().optional() }).strict()
+      .refine(summary => Object.keys(summary).length > 0, { message: 'Informe ao menos uma opção.' }).optional(),
   }).strict().optional(),
 });
 

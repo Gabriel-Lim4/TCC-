@@ -31,3 +31,16 @@ test('daily sync clears known empty campaigns in range and writes only daily row
 test('Google missing renewable credentials requests reconnect before a network call', async () => {
   await assert.rejects(getGoogleAccessToken(account), { code: 'RECONNECT_REQUIRED' });
 });
+
+test('with encryption on, the stored Google token is opened before use and the renewed one is stored sealed', async () => {
+  const { sealToken } = await import('../services/tokenVault.js');
+  process.env.TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 3).toString('base64');
+  try {
+    const sealed = sealToken('google-access');
+    assert.match(sealed, /^enc:v1:/);
+    const fresh = { ...account, acess_token: sealed, token_expires_at: new Date(Date.now() + 3600000) };
+    assert.equal(await getGoogleAccessToken(fresh), 'google-access');
+    // um token antigo em texto continua funcionando com a chave ligada
+    assert.equal(await getGoogleAccessToken({ ...fresh, acess_token: 'legacy-plain' }), 'legacy-plain');
+  } finally { delete process.env.TOKEN_ENCRYPTION_KEY; }
+});

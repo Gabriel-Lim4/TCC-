@@ -1,11 +1,12 @@
 import { prisma } from '../config/database.js';
+import { openToken, sealToken } from './tokenVault.js';
 import * as meta from './metaService.js';
 import * as google from './googleService.js';
 import { saveDailyMetrics } from './metricsStore.js';
 
 export async function getGoogleAccessToken(account) {
   if (account.token_expires_at && new Date(account.token_expires_at).getTime() > Date.now() + 60000) {
-    return account.acess_token;
+    return openToken(account.acess_token);
   }
   if (!account.refresh_token) {
     const error = new Error('Reconecte sua conta Google Ads para renovar o acesso.');
@@ -13,10 +14,10 @@ export async function getGoogleAccessToken(account) {
     error.code = 'RECONNECT_REQUIRED';
     throw error;
   }
-  const token = await google.atualizarTokenGoogle(account.refresh_token);
+  const token = await google.atualizarTokenGoogle(openToken(account.refresh_token));
   await prisma.contas_vinculadas.update({
     where: { pk_id_conta: account.pk_id_conta },
-    data: { acess_token: token.access_token, token_expires_at: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+    data: { acess_token: sealToken(token.access_token), token_expires_at: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
   });
   return token.access_token;
 }
@@ -25,7 +26,7 @@ async function syncAccount(userId, platform, range) {
   const account = await prisma.contas_vinculadas.findFirst({ where: { fk_id_usuario: userId, plataforma: platform } });
   if (!account) throw Object.assign(new Error('Conecte sua conta antes de sincronizar.'), { status: 404 });
   const isMeta = platform === 'meta';
-  const token = isMeta ? account.acess_token : await getGoogleAccessToken(account);
+  const token = isMeta ? openToken(account.acess_token) : await getGoogleAccessToken(account);
   const [details, campaigns, dailyRows] = await Promise.all([
     isMeta ? meta.buscarContaMeta(account.account_id, token) : google.buscarContaGoogle(account.account_id, token),
     isMeta ? meta.buscarCampanhas(account.account_id, token) : google.buscarCampanhasGoogle(account.account_id, token),

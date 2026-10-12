@@ -177,3 +177,17 @@ describe('authValidator preferences.summary', () => {
     }
   });
 });
+
+describe('authValidator preferences.summary alerts', () => {
+  const base = { nome: 'Ana' };
+  it('accepts alerts alone or with weekly', () => {
+    for (const summary of [{ alerts: true }, { alerts: false }, { weekly: true, alerts: false }]) {
+      assert.strictEqual(atualizarPerfilSchema.safeParse({ ...base, preferences: { summary } }).success, true, JSON.stringify(summary));
+    }
+  });
+  it('still rejects empty, extra and non-boolean values', () => {
+    for (const summary of [{}, { alerts: 'sim' }, { alerts: true, extra: 1 }]) {
+      assert.strictEqual(atualizarPerfilSchema.safeParse({ ...base, preferences: { summary } }).success, false, JSON.stringify(summary));
+    }
+  });
+});

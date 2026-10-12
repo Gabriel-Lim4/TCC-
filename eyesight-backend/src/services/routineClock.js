@@ -24,3 +24,8 @@ export function weekKey(date, timeZone) {
   const week = 1 + Math.floor((thursday - firstMonday) / DAY / 7);
   return `${weekYear}-W${String(week).padStart(2, '0')}`;
 }
+
+/** Data local `AAAA-MM-DD` (fuso do relatório). */
+export function dayKey(date, timeZone) {
+  return new Date(localDate(date, timeZone)).toISOString().slice(0, 10);
+}

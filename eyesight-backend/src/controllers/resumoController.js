@@ -38,8 +38,11 @@ export async function cancelar(req, res) {
   const userId = verifyUnsubscribeToken(req.body?.token ?? req.query?.t);
   if (!userId) return res.status(400).json({ erro: 'Este link não é válido ou expirou.' });
   try {
-    await prisma.$executeRaw`UPDATE usuarios SET preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object('summary', jsonb_build_object('weekly', false)) WHERE pk_id_usuario = ${userId}`;
-    return res.json({ mensagem: 'Resumo semanal desligado.' });
+    // Mescla dentro de `summary` para desligar só a opção do e-mail recebido, sem apagar a outra.
+    const alerts = (req.body?.escopo ?? req.query?.e) === 'alertas';
+    if (alerts) await prisma.$executeRaw`UPDATE usuarios SET preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object('summary', COALESCE(preferences->'summary', '{}'::jsonb) || jsonb_build_object('alerts', false)) WHERE pk_id_usuario = ${userId}`;
+    else await prisma.$executeRaw`UPDATE usuarios SET preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object('summary', COALESCE(preferences->'summary', '{}'::jsonb) || jsonb_build_object('weekly', false)) WHERE pk_id_usuario = ${userId}`;
+    return res.json({ mensagem: alerts ? 'Alertas desligados.' : 'Resumo semanal desligado.' });
   } catch {
     console.error('[RESUMO] falha ao cancelar', { userId });
     return res.status(500).json({ erro: 'Não foi possível cancelar agora. Tente novamente.' });
