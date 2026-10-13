@@ -53,11 +53,12 @@ export async function callback(req, res) {
   const { code, error, state } = req.query;
 
 if (error) {
-  return res.redirect(`${env.frontendUrl}/app/account?meta=negado`);
+  return res.redirect(`${env.frontendUrl}/app/meta?meta=negado`);
 }
 
 if (!code || !state) {
-  return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
+  console.error('[META] Callback sem code/state:', { temCode: !!code, temState: !!state });
+  return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
 }
 
 let userId;
@@ -66,15 +67,15 @@ try {
   const payload = jwt.verify(state, env.jwt.secret);
 
   if (payload.finalidade !== 'meta-oauth') {
-    return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
+    return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
   }
 
   userId = payload.userId;
 
 } catch (err) {
-  console.error('[META] State OAuth inválido:');
+  console.error('[META] State OAuth inválido:', err.name, err.message);
 
-  return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
+  return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
 }
  
 
@@ -91,7 +92,7 @@ try {
       select: { account_id: true },
     });
     if (existingAccount && existingAccount.account_id !== adAccountId) {
-      return res.redirect(`${env.frontendUrl}/app/account?meta=troca-bloqueada`);
+      return res.redirect(`${env.frontendUrl}/app/meta?meta=troca-bloqueada`);
     }
 
     // upsert: cria ou atualiza a conta vinculada
@@ -119,18 +120,22 @@ try {
     });
 
     console.log(`[META] Conta vinculada. Usuário: ${userId} | Account: ${adAccountId}`);
-    return res.redirect(`${env.frontendUrl}/app/account?meta=conectado`);
+    // Sucesso volta para a tela inicial; falhas ficam em /app/meta, que mostra a mensagem.
+    return res.redirect(`${env.frontendUrl}/app?meta=conectado`);
 
   } catch (err) {
     if (err.code === 'SEM_CONTA') {
-      return res.redirect(`${env.frontendUrl}/app/account?meta=sem-conta`);
+      return res.redirect(`${env.frontendUrl}/app/meta?meta=sem-conta`);
     }
-    console.error('[META] Erro no callback:');
-    if (err.response?.data?.error) {
-      const { mensagem } = metaService.extrairErroMeta(err);
-      console.error('[META] Erro Graph API:');
+    console.error('[META] Erro no callback:', err.code, err.message);
+    const erroApi = err.response?.data?.error;
+    if (erroApi) {
+      console.error('[META] Erro Graph API:', {
+        url: err.config?.url, code: erroApi.code, subcode: erroApi.error_subcode,
+        type: erroApi.type, message: erroApi.message, fbtrace_id: erroApi.fbtrace_id,
+      });
     }
-    return res.redirect(`${env.frontendUrl}/app/account?meta=erro`);
+    return res.redirect(`${env.frontendUrl}/app/meta?meta=erro`);
   }
 }
 

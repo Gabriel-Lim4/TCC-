@@ -34,7 +34,7 @@ test('Meta and Google reject changing linked account without writing or deleting
   existing = { account_id: 'old' }; updates = [];
   const metaResponse = response(); purpose = 'meta-oauth';
   await callback({ query: { code: 'code', state: 'state' } }, metaResponse);
-  assert.match(metaResponse.url, /meta=troca-bloqueada$/);
+  assert.equal(metaResponse.url, 'https://eyesight.test/app/meta?meta=troca-bloqueada');
   const googleResponse = response(); purpose = 'google-oauth';
   await callbackGoogle({ query: { code: 'code', state: 'state' } }, googleResponse);
   assert.match(googleResponse.url, /google=troca-bloqueada$/);
@@ -45,10 +45,19 @@ test('renewing same OAuth account preserves link and permits token rotation', as
   existing = { account_id: 'act_new' }; updates = []; purpose = 'meta-oauth';
   const res = response();
   await callback({ query: { code: 'code', state: 'state' } }, res);
-  assert.match(res.url, /meta=conectado$/);
+  assert.equal(res.url, 'https://eyesight.test/app?meta=conectado');
   assert.equal(updates.length, 1);
   assert.equal(updates[0].update.account_id, 'act_new');
   assert.equal(updates[0].where.fk_id_usuario_plataforma.fk_id_usuario, 42);
+});
+
+// /app/meta é a tela que lê ?meta=; /app/account é estática e ignoraria o retorno.
+test('Meta callback failures return to the Meta screen', async () => {
+  for (const query of [{}, { error: 'access_denied' }]) {
+    const res = response();
+    await callback({ query }, res);
+    assert.match(res.url, /^https:\/\/eyesight\.test\/app\/meta\?meta=(erro|negado)$/);
+  }
 });
 
 test('health pings database and reports sanitized outage without exposing internals', async () => {
