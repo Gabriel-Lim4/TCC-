@@ -54,16 +54,24 @@ export default async (req, res, next) => {
 
     // Confirma que o perfil correspondente ainda existe
     // na tabela pública de usuários.
-    const usuario = await prisma.usuarios.findUnique({
+    const selecao = { pk_id_usuario: true, nome_usuario: true, auth_user_id: true };
+    let usuario = await prisma.usuarios.findUnique({
       where: {
         auth_user_id: user.id
       },
-      select: {
-        pk_id_usuario: true,
-        nome_usuario: true,
-        auth_user_id: true
-      }
+      select: selecao
     });
+
+    // Se o perfil não foi criado no cadastro (falha passageira do banco), cria agora para a conta não ficar inutilizável.
+    if (!usuario) {
+      const nome = String(user.user_metadata?.nome || user.email?.split('@')[0] || 'Usuário').trim().slice(0, 100);
+      try {
+        usuario = await prisma.usuarios.create({ data: { nome_usuario: nome, auth_user_id: user.id }, select: selecao });
+      } catch (err) {
+        if (err.code !== 'P2002') throw err;
+        usuario = await prisma.usuarios.findUnique({ where: { auth_user_id: user.id }, select: selecao });
+      }
+    }
 
     if (!usuario) {
       return res.status(401).json({

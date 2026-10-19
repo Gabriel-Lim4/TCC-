@@ -21,12 +21,12 @@ import rateLimit from 'express-rate-limit';
 const router = Router();
 
 router.get('/campanhas', authMiddleware, rateLimiter.api, listarCampanhas);
-router.get('/campanhas/:id', authMiddleware, rateLimiter.strict, detalharCampanha);
+router.get('/campanhas/:id', authMiddleware, rateLimiter.api, detalharCampanha);
 router.get('/geral', authMiddleware, rateLimiter.api, metricasGerais);
 router.get('/resumo', authMiddleware, rateLimiter.api, resumoUnificado);
 router.get('/analytics', authMiddleware, rateLimiter.api, analytics);
 router.post('/sincronizar', authMiddleware, rateLimit({ windowMs: 60000, limit: 5, keyGenerator: req => String(req.usuario.id), standardHeaders: true, legacyHeaders: false, message: { erro: 'Aguarde um minuto antes de sincronizar novamente.' } }), syncAnalytics);
 router.put('/alertas', authMiddleware, rateLimiter.strict, saveAlertSettings);
-router.get('/exportar', authMiddleware, rateLimiter.strict, exportAnalytics);
+router.get('/exportar', authMiddleware, rateLimiter.api, exportAnalytics);
 
 export default router;

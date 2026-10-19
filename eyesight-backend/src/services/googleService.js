@@ -69,7 +69,7 @@ function googleAdsHeaders(accessToken) {
 
 // ── 4. Busca contas de cliente do Google Ads ──────────────────
 // Retorna o customer ID (ex: "1234567890")
-export async function buscarClienteGoogle(accessToken) {
+export async function buscarClienteGoogle(accessToken, preferidoId) {
   if (env.google.customerId) {
     const id = validateGoogleId(env.google.customerId);
     // The authenticated customer query verifies access, including through an MCC.
@@ -89,6 +89,14 @@ export async function buscarClienteGoogle(accessToken) {
     const e = new Error('Nenhuma conta de cliente Google Ads encontrada.');
     e.code = 'SEM_CONTA';
     throw e;
+  }
+  // Ao reconectar, mantém a conta já vinculada se ela continuar acessível e não for conta gerente.
+  if (preferidoId) {
+    const preferido = validateGoogleId(preferidoId);
+    if (resourceNames.some(resource => resource.replace('customers/', '').replaceAll('-', '') === preferido)) {
+      const account = await buscarContaGoogle(preferido, accessToken);
+      if (account && !account.manager) return preferido;
+    }
   }
   // resourceName no formato: "customers/1234567890"
   for (const resource of resourceNames) {

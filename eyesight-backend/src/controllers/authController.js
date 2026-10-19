@@ -146,13 +146,19 @@ export async function login(req, res) {
     if (!data.user || !data.session)
       return res.status(401).json({ erro: 'Não foi possível iniciar a sessão.' });
 
-    const usuario = await prisma.usuarios.findUnique({
-      where:  { auth_user_id: data.user.id },
-      select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true, telefone: true, localizacao: true, preferences: true },
-    });
+    const selecaoPerfil = { pk_id_usuario: true, nome_usuario: true, auth_user_id: true, telefone: true, localizacao: true, preferences: true };
+    let usuario = await prisma.usuarios.findUnique({ where: { auth_user_id: data.user.id }, select: selecaoPerfil });
 
-    if (!usuario)
-      return res.status(404).json({ erro: 'Perfil do usuário não encontrado.' });
+    // Perfil que não chegou a ser criado no cadastro (falha passageira do banco): cria agora.
+    if (!usuario) {
+      const nomePerfil = String(data.user.user_metadata?.nome || email.split('@')[0]).trim().slice(0, 100);
+      try {
+        usuario = await prisma.usuarios.create({ data: { nome_usuario: nomePerfil, auth_user_id: data.user.id }, select: selecaoPerfil });
+      } catch (err) {
+        if (err.code !== 'P2002') throw err;
+        usuario = await prisma.usuarios.findUnique({ where: { auth_user_id: data.user.id }, select: selecaoPerfil });
+      }
+    }
 
     return res.status(200).json({
       mensagem: 'Login realizado com sucesso.',
@@ -235,6 +241,18 @@ export async function esqueciSenha(req, res) {
   }
 }
 
+// Lê (sem validar assinatura; o Supabase valida no PUT) os métodos de autenticação do JWT.
+function eTokenDeRecuperacao(token) {
+  try {
+    const { amr } = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8'));
+    const metodos = (Array.isArray(amr) ? amr : []).map(item => (typeof item === 'string' ? item : item?.method));
+    if (metodos.some(m => ['password', 'oauth', 'sso/saml', 'mfa/totp'].includes(m))) return false;
+    return metodos.some(m => ['recovery', 'otp'].includes(m));
+  } catch {
+    return false;
+  }
+}
+
 // ── POST /auth/redefinir-senha ───────────────────────────────
 // O front recebe o access_token de recuperação no hash da URL (#access_token=...)
 // e o reenvia aqui junto com a nova senha.
@@ -254,8 +272,10 @@ export async function redefinirSenha(req, res) {
 
   const { accessToken, novaSenha } = result.data;
 
-  if (novaSenha.length < 6)
-    return res.status(400).json({ erro: 'A senha deve ter no mínimo 6 caracteres.' });
+  // Só vale o token do link de recuperação. Um token de sessão comum (entrou com senha ou OAuth)
+  // não pode trocar a senha por aqui: isso pularia a senha atual exigida em /auth/alterar-senha.
+  if (!eTokenDeRecuperacao(accessToken))
+    return res.status(400).json({ erro: 'Link inválido ou expirado. Solicite um novo.' });
 
   try {
     await axios.put(
@@ -320,10 +340,20 @@ export async function atualizarPerfil(req, res) {
   const { nome, telefone, localizacao, preferences } = result.data;
 
   try {
-    const current = preferences ? await prisma.usuarios.findUnique({ where: { auth_user_id: req.usuario.auth_user_id }, select: { preferences: true } }) : null;
+    // A mesclagem das preferências acontece no banco (um único UPDATE), para gravações simultâneas
+    // (KPIs, resumo por e-mail, alertas) não sobrescreverem as chaves umas das outras.
+    if (preferences) {
+      const { summary, ...resto } = preferences;
+      await prisma.$executeRaw`
+        UPDATE usuarios
+        SET preferences = COALESCE(preferences, '{}'::jsonb) || ${JSON.stringify(resto)}::text::jsonb
+          || CASE WHEN ${summary === undefined}::boolean THEN '{}'::jsonb ELSE jsonb_build_object('summary',
+               COALESCE(preferences->'summary', '{}'::jsonb) || ${JSON.stringify(summary ?? {})}::text::jsonb) END
+        WHERE auth_user_id = ${req.usuario.auth_user_id}::uuid`;
+    }
     const usuario = await prisma.usuarios.update({
       where:  { auth_user_id: req.usuario.auth_user_id },
-      data:   { nome_usuario: nome.trim(), telefone, localizacao, ...(preferences ? { preferences: { ...current?.preferences, ...preferences, ...(preferences.summary ? { summary: { ...current?.preferences?.summary, ...preferences.summary } } : {}) } } : {}) },
+      data:   { nome_usuario: nome.trim(), telefone, localizacao },
       select: { pk_id_usuario: true, nome_usuario: true, auth_user_id: true, telefone: true, localizacao: true, preferences: true },
     });
 

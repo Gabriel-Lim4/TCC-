@@ -85,12 +85,12 @@ try {
     const { access_token, expiraEm } = await metaService.trocarPorTokenLongo(tokenCurto.access_token);
 
     // Busca o Ad Account ID da conta de anúncios do usuário
-    const adAccountId             = await metaService.buscarAdAccountId(access_token);
-
     const existingAccount = await prisma.contas_vinculadas.findFirst({
       where: { fk_id_usuario: Number(userId), plataforma: 'meta' },
       select: { account_id: true },
     });
+    const adAccountId             = await metaService.buscarAdAccountId(access_token, existingAccount?.account_id);
+
     if (existingAccount && existingAccount.account_id !== adAccountId) {
       return res.redirect(`${env.frontendUrl}/app/account?meta=troca-bloqueada`);
     }

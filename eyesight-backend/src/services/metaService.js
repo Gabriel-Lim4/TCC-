@@ -50,7 +50,7 @@ export async function trocarPorTokenLongo(tokenCurto) {
 
 // ── 4. Busca o Ad Account ID do usuário ─────────────────────
 // Formato retornado: "act_123456789"
-export async function buscarAdAccountId(accessToken) {
+export async function buscarAdAccountId(accessToken, preferidoId) {
   const resposta = await axios.get(`${GRAPH_URL}/me/adaccounts`, {
     params: { fields: 'id,name,account_status', access_token: accessToken },
   });
@@ -60,6 +60,8 @@ export async function buscarAdAccountId(accessToken) {
     e.code = 'SEM_CONTA';
     throw e;
   }
+  // Ao reconectar, mantém a conta já vinculada se ela ainda estiver na lista (a ordem da Meta pode mudar).
+  if (preferidoId && contas.some(conta => conta.id === preferidoId)) return preferidoId;
   return contas[0].id;
 }
 

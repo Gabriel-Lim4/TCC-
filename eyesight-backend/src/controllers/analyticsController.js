@@ -74,9 +74,10 @@ export async function saveAlertSettings(req, res) {
   const result = alertSettingsSchema.safeParse(req.body);
   if (!result.success) return res.status(400).json({ erro: 'Informe limites válidos e não negativos.' });
   try {
-    const user = await prisma.usuarios.findUnique({ where: { pk_id_usuario: req.usuario.id }, select: { preferences: true } });
-    const preferences = { ...(user?.preferences || {}), alerts: result.data };
-    await prisma.usuarios.update({ where: { pk_id_usuario: req.usuario.id }, data: { preferences } });
+    await prisma.$executeRaw`
+      UPDATE usuarios
+      SET preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object('alerts', ${JSON.stringify(result.data)}::text::jsonb)
+      WHERE pk_id_usuario = ${req.usuario.id}`;
     return res.json({ mensagem: 'Limites salvos. Os alertas aparecem no painel ao consultar as métricas.', alerts: result.data });
   } catch (error) { return fail(res, error); }
 }

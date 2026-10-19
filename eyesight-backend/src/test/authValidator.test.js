@@ -135,6 +135,23 @@ describe('authValidator', () => {
       assert.strictEqual(perfil({ theme: 'light' }).success, true);
     });
 
+    it('deve aceitar os indicadores escolhidos para o painel, na ordem enviada', () => {
+      const result = perfil({ dashboardCards: ['roas', 'ctr', 'cpm'] });
+      assert.strictEqual(result.success, true);
+      assert.deepStrictEqual(result.data.preferences.dashboardCards, ['roas', 'ctr', 'cpm']);
+    });
+
+    it('deve aceitar lista vazia de indicadores (cliente ocultou todos)', () => {
+      assert.strictEqual(perfil({ dashboardCards: [] }).success, true);
+    });
+
+    it('deve rejeitar indicador desconhecido, repetido ou lista grande demais', () => {
+      assert.strictEqual(perfil({ dashboardCards: ['roas', 'lucro'] }).success, false);
+      assert.strictEqual(perfil({ dashboardCards: ['roas', 'roas'] }).success, false);
+      assert.strictEqual(perfil({ dashboardCards: new Array(11).fill('roas') }).success, false);
+      assert.strictEqual(perfil({ dashboardCards: 'roas' }).success, false);
+    });
+
     it('deve rejeitar dismissed que nao seja booleano', () => {
       assert.strictEqual(perfil({ onboarding: { dismissed: 'sim' } }).success, false);
     });

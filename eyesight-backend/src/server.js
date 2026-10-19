@@ -17,6 +17,10 @@ import iaRoutes       from './routes/iaRoutes.js';
 import jobsRoutes     from './routes/jobsRoutes.js';
 import resumoRoutes   from './routes/resumoRoutes.js';
 import instagramRoutes from './routes/instagramRoutes.js';
+import { mountFront } from './staticFront.js';
+import { tokenEncryptionEnabled } from './services/tokenVault.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const app = express();
 // Render terminates connections at its reverse proxy. Trust only the nearest hop,
@@ -24,7 +28,22 @@ const app = express();
 if (process.env.RENDER === 'true') app.set('trust proxy', 1);
 
 app.use(cors());
-app.use(helmet());
+// Pasta do site compilado (frontend/dist). Em produção o mesmo serviço entrega site e API.
+const FRONT_DIR = process.env.FRONT_DIST || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../frontend/dist');
+// CSP do site: fontes do Google, estilos inline do React e animações Lottie (blob/data). Tudo o mais só do próprio domínio.
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      'script-src': ["'self'", "'wasm-unsafe-eval'"],
+      'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      'font-src': ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      'img-src': ["'self'", 'data:', 'blob:'],
+      'connect-src': ["'self'", 'data:', 'blob:'],
+      'worker-src': ["'self'", 'blob:'],
+    },
+  },
+}));
 app.use(express.json());
 
 app.use('/auth',       authRoutes);
@@ -39,6 +58,9 @@ app.use('/resumo',     resumoRoutes);
 // Health check also reaches PostgreSQL for the scheduled keepalive.
 app.get('/health', health);
 
+// Site (frontend/dist) servido pelo mesmo serviço, quando existir
+const servesFront = mountFront(app, FRONT_DIR);
+
 // 404 — rota não encontrada
 app.use(notFoundHandler);
 
@@ -47,6 +69,8 @@ app.use(errorHandler);
 
 async function start() {
   await testConnection();
+  if (env.app.nodeEnv === 'production' && !tokenEncryptionEnabled())
+    console.warn('[SERVER] ⚠️  TOKEN_ENCRYPTION_KEY não definida: os tokens das contas de anúncio estão sendo salvos em texto puro. Defina a chave no ambiente.');
   app.listen(env.app.port, () => {
     console.log(`\n[SERVER] ✅ Rodando em http://localhost:${env.app.port} [${env.app.nodeEnv}]`);
     console.log('[SERVER]    POST   /auth/cadastro');
@@ -70,7 +94,8 @@ async function start() {
     console.log('[SERVER]    GET    /ia/analises');
     console.log('[SERVER]    GET    /ia/analises/:id');
     console.log('[SERVER]    DELETE /ia/analises/:id');
-    console.log('[SERVER]    GET    /health\n');
+    console.log('[SERVER]    GET    /health');
+    console.log(servesFront ? `[SERVER]    Site: servindo ${FRONT_DIR}\n` : '[SERVER]    Site: frontend/dist não encontrado (modo só API)\n');
   });
 }
 

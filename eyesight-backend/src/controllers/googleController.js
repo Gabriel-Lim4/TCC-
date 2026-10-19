@@ -81,12 +81,12 @@ export async function callbackGoogle(req, res) {
     const refreshToken = tokenData.refresh_token;
 
     // Busca o customer ID da conta de anúncios do usuário
-    const customerId = await googleService.buscarClienteGoogle(accessToken);
-
     const existingAccount = await prisma.contas_vinculadas.findFirst({
       where: { fk_id_usuario: Number(userId), plataforma: 'google' },
       select: { account_id: true },
     });
+    const customerId = await googleService.buscarClienteGoogle(accessToken, existingAccount?.account_id);
+
     if (existingAccount && existingAccount.account_id !== customerId) {
       return res.redirect(`${env.frontendUrl}/app/account?google=troca-bloqueada`);
     }

@@ -2,29 +2,32 @@ import { test, mock, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 const auth = { refreshSession: mock.fn(), signInWithPassword: mock.fn(), updateUser: mock.fn(), signOut: mock.fn(), admin: { signOut: mock.fn() } };
 const users = { findUnique: mock.fn(), update: mock.fn() };
-mock.module('../config/database.js', { namedExports: { prisma: { usuarios: users } } });
+const executeRaw = mock.fn(async () => 1);
+mock.module('../config/database.js', { namedExports: { prisma: { usuarios: users, $executeRaw: executeRaw } } });
 mock.module('../config/supabase.js', { namedExports: { createAuthClient: () => ({ auth }) } });
 mock.module('../config/env.js', { defaultExport: { frontendUrl: 'http://localhost', supabase: {} } });
 const { atualizarPerfil, alterarSenha, refresh, logout } = await import('../controllers/authController.js');
 const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(data) { this.body = data; return this; } });
 const usuario = { id: 7, auth_user_id: 'auth-7', email: 'a@example.com' };
 beforeEach(() => { for (const item of [...Object.values(auth), ...Object.values(users), auth.admin.signOut]) item.mock?.resetCalls(); });
-test('profile persists contact fields and preserves other preferences', async () => {
-  users.findUnique.mock.mockImplementation(async () => ({ preferences: { alerts: { ctr: 1 } } }));
+test('profile persists contact fields and merges preferences in the database', async () => {
   users.update.mock.mockImplementation(async ({ data }) => ({ ...data, pk_id_usuario: 7, auth_user_id: 'auth-7' }));
+  executeRaw.mock.resetCalls();
   const res = response();
   await atualizarPerfil({ usuario, body: { nome: ' Ana ', telefone: '1234', localizacao: 'Recife', preferences: { theme: 'light' } } }, res);
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(users.update.mock.calls[0].arguments[0].data.preferences, { alerts: { ctr: 1 }, theme: 'light' });
+  assert.equal(executeRaw.mock.callCount(), 1);
+  assert.deepEqual(JSON.parse(executeRaw.mock.calls[0].arguments[1]), { theme: 'light' });
+  assert.deepEqual(users.update.mock.calls[0].arguments[0].data, { nome_usuario: 'Ana', telefone: '1234', localizacao: 'Recife' });
   assert.equal(res.body.usuario.telefone, '1234');
 });
-test('onboarding dismissal merges without losing alerts or theme', async () => {
-  users.findUnique.mock.mockImplementation(async () => ({ preferences: { alerts: { ctr: 1 }, theme: 'dark' } }));
+test('onboarding dismissal is sent as a database merge, leaving other preferences untouched', async () => {
   users.update.mock.mockImplementation(async ({ data }) => ({ ...data, pk_id_usuario: 7, auth_user_id: 'auth-7' }));
+  executeRaw.mock.resetCalls();
   const res = response();
   await atualizarPerfil({ usuario, body: { nome: 'Ana', preferences: { onboarding: { dismissed: true } } } }, res);
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(users.update.mock.calls[0].arguments[0].data.preferences, { alerts: { ctr: 1 }, theme: 'dark', onboarding: { dismissed: true } });
+  assert.deepEqual(JSON.parse(executeRaw.mock.calls[0].arguments[1]), { onboarding: { dismissed: true } });
 });
 test('incorrect current password never updates password', async () => {
   auth.signInWithPassword.mock.mockImplementation(async () => ({ data: {}, error: { status: 400 } }));
