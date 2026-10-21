@@ -59,7 +59,43 @@ function providerFailure(err) {
   return aiError('O serviço de IA está indisponível. Tente novamente em instantes.', 503);
 }
 
-export async function complete(messages, { structured = false, transport = axios, apiKey = process.env.OPENAI_API_KEY, model = process.env.OPENAI_MODEL || 'gpt-4o-mini', baseUrl = process.env.OPENAI_BASE_URL, retryDelayMs = 500 } = {}) {
+// Modelos reserva: o provedor pode ficar sobrecarregado (503) ou sem cota (429) justamente no modelo escolhido.
+// OPENAI_FALLBACK_MODELS (separados por vírgula; vazio desliga) manda; no Google há um padrão com apelidos "-latest".
+const GOOGLE_FALLBACKS = ['gemini-flash-lite-latest', 'gemini-3.5-flash'];
+function modelChain(model, baseUrl, fallbackModels) {
+  let extra = fallbackModels;
+  if (!extra) {
+    const configured = process.env.OPENAI_FALLBACK_MODELS;
+    if (configured !== undefined) extra = configured.split(',').map(name => name.trim()).filter(Boolean);
+    else extra = /(^|\.)generativelanguage\.googleapis\.com$/.test(new URL((baseUrl || OPENAI_BASE_URL).trim()).hostname) ? GOOGLE_FALLBACKS : [];
+  }
+  return [model, ...extra.filter(name => name !== model)];
+}
+
+// Envia ao primeiro modelo e, se ele falhar de forma temporária ou por limite de uso, ao seguinte.
+// Só o último modelo espera o tempo longo e repete a tentativa: os anteriores desistem cedo para dar tempo ao reserva.
+async function postWithFallback({ transport, endpoint, body, options, models, retryDelayMs }) {
+  let lastError;
+  for (const [index, model] of models.entries()) {
+    const request = { ...body, model };
+    const last = index === models.length - 1;
+    const config = last ? options : { ...options, timeout: Math.min(options.timeout, 12000) };
+    for (let attempt = 0; ; attempt++) {
+      try { return { response: await transport.post(endpoint, request, config), model }; } catch (err) {
+        lastError = err;
+        // Provedor que não conhece reasoning_effort: repete sem ele em vez de falhar.
+        if (statusOf(err) === 400 && 'reasoning_effort' in request) { delete request.reasoning_effort; continue; }
+        if (statusOf(err) === 429) break;
+        if (!transient(err)) throw err;
+        if (!last || attempt >= 1) break;
+        await sleep(retryDelayMs);
+      }
+    }
+  }
+  throw lastError;
+}
+
+export async function complete(messages, { structured = false, transport = axios, apiKey = process.env.OPENAI_API_KEY, model = process.env.OPENAI_MODEL || 'gpt-4o-mini', baseUrl = process.env.OPENAI_BASE_URL, retryDelayMs = 500, fallbackModels } = {}) {
   if (!apiKey) throw aiError('O assistente ainda não está configurado. O administrador precisa configurar a chave do provedor de IA.', 503);
   const { endpoint, openai } = providerEndpoint(baseUrl);
   // Outros provedores podem rejeitar "store" e "max_completion_tokens"; modelos com raciocínio gastam parte do limite pensando.
@@ -75,16 +111,9 @@ export async function complete(messages, { structured = false, transport = axios
     body.messages = [...messages, { role: 'user', content: spec?.instruction ?? JSON_INSTRUCTION }];
   }
   const options = { headers: { Authorization: `Bearer ${apiKey}` }, timeout: 40000, maxContentLength: 100000, httpsAgent: keepAliveAgent };
-  let result;
+  let result; let usedModel;
   try {
-    for (let attempt = 0; ; attempt++) {
-      try { result = await transport.post(endpoint, body, options); break; } catch (err) {
-        // Provedor que não conhece reasoning_effort: repete sem ele em vez de falhar.
-        if (statusOf(err) === 400 && 'reasoning_effort' in body) { delete body.reasoning_effort; continue; }
-        if (attempt >= 1 || !transient(err)) throw err;
-        await sleep(retryDelayMs);
-      }
-    }
+    ({ response: result, model: usedModel } = await postWithFallback({ transport, endpoint, body, options, models: modelChain(model, baseUrl, fallbackModels), retryDelayMs }));
   } catch (err) {
     throw providerFailure(err);
   }
@@ -92,11 +121,11 @@ export async function complete(messages, { structured = false, transport = axios
   if (choice?.finish_reason !== 'stop' || choice.message?.refusal || typeof choice.message?.content !== 'string' || !choice.message.content.trim()) {
     throw aiError('A IA não conseguiu concluir a resposta. Reformule a solicitação.', 502);
   }
-  if (!structured) return { text: choice.message.content.slice(0, 12000), model };
+  if (!structured) return { text: choice.message.content.slice(0, 12000), model: usedModel };
   let parsed;
   try { parsed = JSON.parse(choice.message.content); } catch { throw aiError('A IA retornou um formato inválido. Tente novamente.', 502); }
-  if (spec) return { data: parsed, modelo: model };
-  return { ...validateAnalysis(parsed), modelo: model };
+  if (spec) return { data: parsed, modelo: usedModel };
+  return { ...validateAnalysis(parsed), modelo: usedModel };
 }
 
 export async function gerarAnalise({ context }) {
@@ -135,20 +164,15 @@ export async function gerarPassos({ context }) {
 
 // Igual a complete() para texto livre, mas entrega cada pedaço ao onDelta assim que o provedor o gera (SSE).
 // A resposta só vale se terminar com finish_reason "stop"; cortada, falha como em complete().
-export async function streamComplete(messages, { onDelta, transport = axios, apiKey = process.env.OPENAI_API_KEY, model = process.env.OPENAI_MODEL || 'gpt-4o-mini', baseUrl = process.env.OPENAI_BASE_URL } = {}) {
+export async function streamComplete(messages, { onDelta, transport = axios, apiKey = process.env.OPENAI_API_KEY, model = process.env.OPENAI_MODEL || 'gpt-4o-mini', baseUrl = process.env.OPENAI_BASE_URL, retryDelayMs = 500, fallbackModels } = {}) {
   if (!apiKey) throw aiError('O assistente ainda não está configurado. O administrador precisa configurar a chave do provedor de IA.', 503);
   const { endpoint, openai } = providerEndpoint(baseUrl);
   const body = { ...baseBody({ model, messages, openai }), stream: true };
   const options = { headers: { Authorization: `Bearer ${apiKey}` }, timeout: 40000, responseType: 'stream', httpsAgent: keepAliveAgent };
-  let stream;
+  let stream; let usedModel;
   try {
-    for (let attempt = 0; ; attempt++) {
-      try { ({ data: stream } = await transport.post(endpoint, body, options)); break; } catch (err) {
-        if (statusOf(err) === 400 && 'reasoning_effort' in body) { delete body.reasoning_effort; continue; }
-        if (attempt >= 1 || !transient(err)) throw err;
-        await sleep(500);
-      }
-    }
+    const sent = await postWithFallback({ transport, endpoint, body, options, models: modelChain(model, baseUrl, fallbackModels), retryDelayMs });
+    stream = sent.response.data; usedModel = sent.model;
   } catch (err) { throw providerFailure(err); }
   let text = ''; let finish = null; let pending = '';
   const take = line => {
@@ -171,5 +195,5 @@ export async function streamComplete(messages, { onDelta, transport = axios, api
     take(pending.trim());
   } catch { throw aiError('O serviço de IA está indisponível. Tente novamente em instantes.', 503); }
   if (finish !== 'stop' || !text.trim()) throw aiError('A IA não conseguiu concluir a resposta. Reformule a solicitação.', 502);
-  return { text: text.slice(0, 12000), model };
+  return { text: text.slice(0, 12000), model: usedModel };
 }

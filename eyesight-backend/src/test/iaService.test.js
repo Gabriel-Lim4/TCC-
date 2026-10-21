@@ -184,3 +184,48 @@ test('o prompt explica como ler a decomposição do custo e o acompanhamento dos
   assert.match(SYSTEM_PROMPT, /planFollowUps/);
   assert.match(SYSTEM_PROMPT, /outros fatores/);
 });
+
+const unavailable = status => Object.assign(new Error('x'), { response: { status } });
+const answers = (content, log) => (url, body) => {
+  log.push(body.model);
+  if (body.model.startsWith('bad')) throw unavailable(503);
+  return { data: { choices: [{ finish_reason: 'stop', message: { content } }] } };
+};
+test('quando o modelo principal fica indisponível, usa o próximo da lista e informa qual respondeu', async () => {
+  const used = [];
+  const result = await complete([], { apiKey: 'k', baseUrl: GEMINI, model: 'bad-main', fallbackModels: ['bad-second', 'good'], retryDelayMs: 0, transport: { post: async (...args) => answers('ok', used)(...args) } });
+  assert.equal(result.model, 'good');
+  assert.deepEqual(used, ['bad-main', 'bad-second', 'good']);
+});
+test('limite de uso (429) de um modelo também passa para o próximo; erro de pedido não', async () => {
+  const used = [];
+  const limited = { post: async (url, body) => { used.push(body.model); if (body.model === 'a') throw unavailable(429); return { data: { choices: [{ finish_reason: 'stop', message: { content: 'ok' } }] } }; } };
+  assert.equal((await complete([], { apiKey: 'k', baseUrl: GEMINI, model: 'a', fallbackModels: ['b'], retryDelayMs: 0, transport: limited })).model, 'b');
+  const invalid = [];
+  await assert.rejects(complete([], { apiKey: 'k', baseUrl: GEMINI, model: 'a', fallbackModels: ['b'], retryDelayMs: 0, transport: { post: async (url, body) => { invalid.push(body.model); throw unavailable(401); } } }));
+  assert.deepEqual(invalid, ['a']);
+});
+test('se todos os modelos falham, o erro é o de indisponível; só o último modelo usa o tempo longo', async () => {
+  const timeouts = [];
+  await assert.rejects(complete([], { apiKey: 'k', baseUrl: GEMINI, model: 'bad-1', fallbackModels: ['bad-2'], retryDelayMs: 0, transport: { post: async (url, body, options) => { timeouts.push(options.timeout); throw unavailable(503); } } }), { status: 503 });
+  assert.ok(timeouts[0] < timeouts.at(-1));
+  assert.equal(timeouts.at(-1), 40000);
+});
+test('o stream também troca de modelo quando o principal está indisponível', async () => {
+  const used = [];
+  const transport = { post: async (url, body) => { used.push(body.model); if (body.model === 'bad') throw unavailable(503); return { data: sse([chunk('Oi'), chunk(null, 'stop')]) }; } };
+  const result = await streamComplete([], { apiKey: 'k', baseUrl: GEMINI, model: 'bad', fallbackModels: ['good'], transport, onDelta() {} });
+  assert.deepEqual(result, { text: 'Oi', model: 'good' });
+});
+test('em endereço do Google há modelos reserva por padrão, e OPENAI_FALLBACK_MODELS troca ou desliga a lista', async () => {
+  const previous = process.env.OPENAI_FALLBACK_MODELS;
+  const tried = async () => { const used = []; await complete([], { apiKey: 'k', baseUrl: GEMINI, model: 'bad-main', retryDelayMs: 0, transport: { post: async (url, body) => { used.push(body.model); throw unavailable(503); } } }).catch(() => {}); return [...new Set(used)]; };
+  try {
+    delete process.env.OPENAI_FALLBACK_MODELS;
+    assert.ok((await tried()).length > 1);
+    process.env.OPENAI_FALLBACK_MODELS = 'x1, x2';
+    assert.deepEqual(await tried(), ['bad-main', 'x1', 'x2']);
+    process.env.OPENAI_FALLBACK_MODELS = '';
+    assert.deepEqual(await tried(), ['bad-main']);
+  } finally { if (previous === undefined) delete process.env.OPENAI_FALLBACK_MODELS; else process.env.OPENAI_FALLBACK_MODELS = previous; }
+});
