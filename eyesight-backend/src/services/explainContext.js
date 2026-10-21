@@ -58,3 +58,20 @@ export function buildExplainContext(analytics, focus) {
     focus: resolveFocus(analytics, focus),
   };
 }
+
+const round1 = value => Math.round(value * 10) / 10;
+
+// Contexto do chat: o mesmo do painel "Explicar" (veredito e metas), mais o "Por que mudou?" já calculado e o acompanhamento
+// dos planos, para a IA citar os números do painel em vez de deduzi-los. Sem veredito não há o que ancorar: devolve null.
+export function buildChatContext(analytics, focus, planFollowUps = []) {
+  if (!analytics.verdict) return null;
+  const change = analytics.changeExplanation;
+  return {
+    ...buildExplainContext(analytics, focus),
+    changeExplanation: change ? {
+      indicator: change.indicator, costChangePct: round1(change.costChange), mainFactor: change.main,
+      factors: change.factors.map(item => ({ factor: item.key, changePct: round1(item.change), sharePct: Math.round(item.share * 100) })),
+    } : null,
+    planFollowUps: planFollowUps.slice(0, 5),
+  };
+}

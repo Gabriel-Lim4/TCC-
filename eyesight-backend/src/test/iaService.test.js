@@ -177,3 +177,10 @@ test('streamComplete fails like complete when the answer is cut off or the provi
   const down = { post: async () => { throw Object.assign(new Error('x'), { response: { status: 429 } }); } };
   await assert.rejects(streamComplete([], { apiKey: 'k', transport: down, onDelta() {} }), { status: 429 });
 });
+
+test('o prompt explica como ler a decomposição do custo e o acompanhamento dos planos', () => {
+  assert.match(SYSTEM_PROMPT, /changeExplanation/);
+  assert.match(SYSTEM_PROMPT, /mainFactor/);
+  assert.match(SYSTEM_PROMPT, /planFollowUps/);
+  assert.match(SYSTEM_PROMPT, /outros fatores/);
+});

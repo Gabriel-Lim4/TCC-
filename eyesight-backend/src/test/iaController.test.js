@@ -5,12 +5,13 @@ const realIa = await import('../services/iaService.js');
 let analyticsImpl = async () => { throw new Error('unexpected analytics'); };
 const analyticsCalls = [];
 const completeCalls = [];
+let answerText = 'Resposta';
 mock.module('../config/database.js', { namedExports: { prisma: {
   assistant_conversations: { findFirst: async query => { queries.push(query); return null; }, create: async ({ data }) => ({ id: 'c1', ...data }), deleteMany: async query => { queries.push(query); return { count: 0 }; } },
   analises_ia: { deleteMany: async query => { queries.push(query); return { count: 0 }; } },
 } } });
 mock.module('../services/analyticsService.js', { namedExports: { getAnalytics: async (userId, query) => { analyticsCalls.push(query); return analyticsImpl(userId, query); } } });
-mock.module('../services/iaService.js', { namedExports: { ...realIa, complete: async messages => { completeCalls.push(messages); return { text: 'Resposta', model: 'm' }; },
+mock.module('../services/iaService.js', { namedExports: { ...realIa, complete: async messages => { completeCalls.push(messages); return { text: answerText, model: 'm' }; },
   streamComplete: async (messages, { onDelta }) => { completeCalls.push(messages); onDelta('Resp'); onDelta('osta'); return { text: 'Resposta', model: 'm' }; } } });
 mock.module('../services/aiWorkflow.js', { namedExports: { withAiLimit: async (_id, action) => action(), campaignAnalysis: async () => ({}) } });
 const controller = await import('../controllers/iaController.js');
@@ -37,12 +38,14 @@ const analytics = overrides => ({ period: { period: 'last_30d', days: 30 }, curr
   alertSettings: { cpaMax: 50 }, verdict: { status: 'attention', basis: 'goal', indicator: 'cpa', insufficientReason: null, reasons: [], highlights: [], actions: [] }, ...overrides });
 const ask = async body => { const res = response(); await controller.chat({ body: { message: 'Por quê?', ...body }, usuario: { id: 7 } }, res); return res; };
 const contexts = () => completeCalls.at(-1).filter(m => m.role === 'user' && /^Veredito e metas/.test(m.content));
-test('chat without focus sends exactly the messages it sent before', async () => {
+test('chat without focus still carries the dashboard verdict, goals and the cost-change breakdown', async () => {
   analyticsImpl = async () => analytics(); analyticsCalls.length = 0;
   const res = await ask({});
   assert.equal(res.code, undefined);
-  assert.equal(completeCalls.at(-1).length, 3);
-  assert.equal(contexts().length, 0);
+  assert.equal(completeCalls.at(-1).length, 4);
+  assert.equal(contexts().length, 1);
+  assert.match(contexts()[0].content, /"focus":null/);
+  assert.match(contexts()[0].content, /"planFollowUps":\[\]/);
   assert.deepEqual(analyticsCalls.at(-1), { periodo: 'last_30d' });
 });
 test('chat with focus adds the verdict and goals block after the analytics context', async () => {
@@ -69,11 +72,26 @@ test('chat rejects bad scope or focus with 400 before querying metrics', async (
   }
   assert.equal(analyticsCalls.length, before);
 });
-test('chat still answers when the verdict is missing', async () => {
+test('chat still answers, without the panel block, when the verdict is missing', async () => {
   analyticsImpl = async () => analytics({ verdict: null });
   const res = await ask({ focus: { kind: 'verdict' } });
   assert.equal(res.code, undefined);
-  assert.match(contexts()[0].content, /"verdict":null/);
+  assert.equal(contexts().length, 0);
+});
+test('chat passes the already computed "Por que mudou?" to the AI', async () => {
+  analyticsImpl = async () => analytics({ changeExplanation: { indicator: 'cpa', costChange: 50, main: 'cvr', factors: [{ key: 'cvr', change: -33.3, share: 0.9 }] } });
+  await ask({});
+  assert.match(contexts()[0].content, /"changeExplanation":\{"indicator":"cpa","costChangePct":50,"mainFactor":"cvr"/);
+});
+test('an answer with a number that is not in the data gets a warning, saved with the message', async () => {
+  analyticsImpl = async () => analytics();
+  answerText = 'Você faturou R$ 987.654,00 no período.';
+  try {
+    const res = await ask({});
+    const saved = res.body.conversation.messages.at(-1).content;
+    assert.match(saved, /^Você faturou R\$ 987\.654,00/);
+    assert.match(saved, /Confira/);
+  } finally { answerText = 'Resposta'; }
 });
 
 function streamResponse() {

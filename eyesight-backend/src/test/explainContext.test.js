@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFocus, buildExplainContext, EXPLAIN_MAX_CHARS } from '../services/explainContext.js';
+import { parseFocus, buildExplainContext, buildChatContext, EXPLAIN_MAX_CHARS } from '../services/explainContext.js';
 import { LIMITS } from '../services/verdictService.js';
 
 const verdict = overrides => ({
@@ -90,4 +90,26 @@ test('worst-case input stays bounded and campaign names are cut', () => {
   const result = buildExplainContext(analytics({ verdict: big }), { kind: 'action', code: 'campaign_over_goal', campaignId: 7 });
   assert.ok(JSON.stringify(result).length <= EXPLAIN_MAX_CHARS);
   assert.equal(result.focus.params.campaign.length, LIMITS.NAME_MAX);
+});
+
+const change = { indicator: 'cpa', costChange: 66.6667, main: 'cvr', factors: [
+  { key: 'cvr', change: -40.123, share: 0.9876 }, { key: 'cpm', change: 3.04, share: 0.05 }, { key: 'ctr', change: 1, share: -0.0376 }] };
+
+test('buildChatContext junta o veredito, a decomposição do custo e o acompanhamento dos planos', () => {
+  const followUps = [{ action: 'campaign_over_goal', campaignId: 7, stepsDone: 1, stepsTotal: 3, followUp: { status: 'ready', result: 'better', changePct: -8 } }];
+  const result = buildChatContext(analytics({ changeExplanation: change }), null, followUps);
+  assert.equal(result.verdict.status, 'attention');
+  assert.deepEqual(result.goals, { ctrMin: 1, cpaMax: 50, budgetMax: 2000 });
+  assert.equal(result.focus, null);
+  assert.deepEqual(result.changeExplanation, { indicator: 'cpa', costChangePct: 66.7, mainFactor: 'cvr', factors: [
+    { factor: 'cvr', changePct: -40.1, sharePct: 99 }, { factor: 'cpm', changePct: 3, sharePct: 5 }, { factor: 'ctr', changePct: 1, sharePct: -4 }] });
+  assert.deepEqual(result.planFollowUps, followUps);
+});
+
+test('buildChatContext sem decomposição nem planos devolve null e lista vazia; sem veredito devolve null', () => {
+  const result = buildChatContext(analytics(), { kind: 'verdict' });
+  assert.equal(result.changeExplanation, null);
+  assert.deepEqual(result.planFollowUps, []);
+  assert.deepEqual(result.focus, { kind: 'verdict' });
+  assert.equal(buildChatContext(analytics({ verdict: null }), null), null);
 });
