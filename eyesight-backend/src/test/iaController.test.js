@@ -10,7 +10,8 @@ mock.module('../config/database.js', { namedExports: { prisma: {
   analises_ia: { deleteMany: async query => { queries.push(query); return { count: 0 }; } },
 } } });
 mock.module('../services/analyticsService.js', { namedExports: { getAnalytics: async (userId, query) => { analyticsCalls.push(query); return analyticsImpl(userId, query); } } });
-mock.module('../services/iaService.js', { namedExports: { ...realIa, complete: async messages => { completeCalls.push(messages); return { text: 'Resposta', model: 'm' }; } } });
+mock.module('../services/iaService.js', { namedExports: { ...realIa, complete: async messages => { completeCalls.push(messages); return { text: 'Resposta', model: 'm' }; },
+  streamComplete: async (messages, { onDelta }) => { completeCalls.push(messages); onDelta('Resp'); onDelta('osta'); return { text: 'Resposta', model: 'm' }; } } });
 mock.module('../services/aiWorkflow.js', { namedExports: { withAiLimit: async (_id, action) => action(), campaignAnalysis: async () => ({}) } });
 const controller = await import('../controllers/iaController.js');
 function response() { return { status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } }; }
@@ -73,4 +74,28 @@ test('chat still answers when the verdict is missing', async () => {
   const res = await ask({ focus: { kind: 'verdict' } });
   assert.equal(res.code, undefined);
   assert.match(contexts()[0].content, /"verdict":null/);
+});
+
+function streamResponse() {
+  return { chunks: [], headers: {}, ended: false, headersSent: false,
+    status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; },
+    setHeader(name, value) { this.headers[name] = value; }, flushHeaders() { this.headersSent = true; },
+    write(text) { this.chunks.push(text); return true; }, end() { this.ended = true; } };
+}
+const events = res => res.chunks.join('').split('\n\n').filter(Boolean).map(block => ({ name: /^event: (.+)$/m.exec(block)[1], data: JSON.parse(/^data: (.+)$/m.exec(block)[1]) }));
+test('chat with stream=true answers as server-sent events and saves the conversation at the end', async () => {
+  analyticsImpl = async () => analytics();
+  const res = streamResponse();
+  await controller.chat({ body: { message: 'Por quê?', stream: true }, usuario: { id: 7 }, on() {} }, res);
+  assert.equal(res.headers['Content-Type'], 'text/event-stream; charset=utf-8');
+  const list = events(res);
+  assert.deepEqual(list.slice(0, 2).map(event => [event.name, event.data.text]), [['delta', 'Resp'], ['delta', 'osta']]);
+  assert.equal(list.at(-1).name, 'done');
+  assert.equal(list.at(-1).data.conversation.messages.at(-1).content, 'Resposta');
+  assert.equal(res.ended, true);
+});
+test('chat with stream=true still rejects bad input with a normal JSON error before streaming', async () => {
+  const res = streamResponse();
+  await controller.chat({ body: { message: '', stream: true }, usuario: { id: 7 }, on() {} }, res);
+  assert.equal(res.code, 400); assert.equal(res.headersSent, false); assert.equal(res.chunks.length, 0);
 });

@@ -111,3 +111,69 @@ test('custom schemas fall back to JSON mode with the instruction on other provid
   assert.deepEqual(result.data, { passos: ['a'] });
   await assert.rejects(complete([], { apiKey: 'k', structured: planSpec, transport: okTransport('not json') }), { status: 502 });
 });
+
+test('other providers get low reasoning effort and a steady temperature for fast, consistent answers', async () => {
+  const seen = {};
+  await complete([{ role: 'user', content: 'oi' }], { apiKey: 'k', baseUrl: GEMINI, transport: okTransport('ok', seen) });
+  assert.equal(seen.body.reasoning_effort, 'low');
+  assert.equal(seen.body.temperature, 0.3);
+});
+test('a provider that rejects reasoning_effort is retried once without it', async () => {
+  const bodies = [];
+  const transport = { post: async (url, body) => {
+    bodies.push(body);
+    if ('reasoning_effort' in body) throw Object.assign(new Error('bad'), { response: { status: 400, data: { error: { message: 'unknown field' } } } });
+    return { data: { choices: [{ finish_reason: 'stop', message: { content: 'ok' } }] } };
+  } };
+  assert.equal((await complete([], { apiKey: 'k', baseUrl: GEMINI, transport })).text, 'ok');
+  assert.equal(bodies.length, 2);
+  assert.equal('reasoning_effort' in bodies[1], false);
+});
+test('temporary provider failures are retried once, but rate limits and bad requests are not', async () => {
+  let calls = 0;
+  const flaky = { post: async () => {
+    if (++calls === 1) throw Object.assign(new Error('boom'), { response: { status: 503 } });
+    return { data: { choices: [{ finish_reason: 'stop', message: { content: 'ok' } }] } };
+  } };
+  assert.equal((await complete([], { apiKey: 'k', transport: flaky, retryDelayMs: 0 })).text, 'ok');
+  assert.equal(calls, 2);
+  for (const status of [429, 401]) {
+    let tries = 0;
+    await assert.rejects(complete([], { apiKey: 'k', retryDelayMs: 0, transport: { post: async () => { tries++; throw Object.assign(new Error('x'), { response: { status } }); } } }));
+    assert.equal(tries, 1);
+  }
+});
+test('OPENAI_REASONING_EFFORT overrides the default', async () => {
+  const previous = process.env.OPENAI_REASONING_EFFORT;
+  process.env.OPENAI_REASONING_EFFORT = 'none';
+  try {
+    const seen = {};
+    await complete([], { apiKey: 'k', baseUrl: GEMINI, transport: okTransport('ok', seen) });
+    assert.equal(seen.body.reasoning_effort, 'none');
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_REASONING_EFFORT; else process.env.OPENAI_REASONING_EFFORT = previous;
+  }
+});
+
+import { Readable } from 'node:stream';
+import { streamComplete } from '../services/iaService.js';
+const sse = lines => Readable.from(lines.map(line => Buffer.from(line)));
+const chunk = (content, finish = null) => `data: ${JSON.stringify({ choices: [{ delta: content === null ? {} : { content }, finish_reason: finish }] })}\n\n`;
+test('streamComplete forwards each piece as it arrives and returns the full text', async () => {
+  const seen = {}; const parts = [];
+  // Um evento cortado no meio de um pedaço de rede precisa ser remontado.
+  const body = chunk('Olá') + chunk(', mundo') + chunk(null, 'stop') + 'data: [DONE]\n\n';
+  const transport = { post: async (url, payload, options) => { Object.assign(seen, { payload, options }); return { data: sse([body.slice(0, 40), body.slice(40)]) }; } };
+  const result = await streamComplete([{ role: 'user', content: 'oi' }], { apiKey: 'k', baseUrl: GEMINI, transport, onDelta: text => parts.push(text) });
+  assert.deepEqual(parts, ['Olá', ', mundo']);
+  assert.deepEqual(result, { text: 'Olá, mundo', model: 'gpt-4o-mini' });
+  assert.equal(seen.payload.stream, true);
+  assert.equal(seen.options.responseType, 'stream');
+});
+test('streamComplete fails like complete when the answer is cut off or the provider is down', async () => {
+  const cut = { post: async () => ({ data: sse([chunk('texto'), chunk(null, 'length')]) }) };
+  await assert.rejects(streamComplete([], { apiKey: 'k', transport: cut, onDelta() {} }), { status: 502 });
+  await assert.rejects(streamComplete([], { apiKey: '', transport: cut, onDelta() {} }), { status: 503 });
+  const down = { post: async () => { throw Object.assign(new Error('x'), { response: { status: 429 } }); } };
+  await assert.rejects(streamComplete([], { apiKey: 'k', transport: down, onDelta() {} }), { status: 429 });
+});
