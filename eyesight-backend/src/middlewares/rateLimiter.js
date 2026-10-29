@@ -7,7 +7,7 @@
 //
 // ─────────────────────────────────────────────────────────────
 
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 const API_RATE_LIMIT = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
@@ -62,7 +62,18 @@ const REFRESH_RATE_LIMIT = rateLimit({
   message: { erro: 'Muitas requisições. Tente novamente em alguns minutos.' },
 });
 
+// Cada chamada à IA custa dinheiro: o limite é por usuário logado (cai para o IP se a rota rodar sem login).
+const AI_RATE_LIMIT = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyGenerator: req => (req.usuario?.id ? `u:${req.usuario.id}` : ipKeyGenerator(req.ip)),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'Você fez muitas perguntas à IA em pouco tempo. Aguarde alguns minutos e tente novamente.' },
+});
+
 export default {
+  ai: AI_RATE_LIMIT,
   auth: AUTH_RATE_LIMIT,
   email: EMAIL_RATE_LIMIT,
   refresh: REFRESH_RATE_LIMIT,

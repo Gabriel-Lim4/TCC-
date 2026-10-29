@@ -100,3 +100,18 @@ test('os erros do cofre trazem status HTTP: reconectar para token ilegível, err
   withKey(undefined, () => assert.throws(() => openToken(sealed), { code: 'TOKEN_KEY_MISSING', status: 500 }));
   withKey(Buffer.alloc(10).toString('base64'), () => assert.throws(() => sealToken('x'), { code: 'TOKEN_KEY_INVALID', status: 500 }));
 });
+
+test('production refuses to start without the encryption key unless plaintext is explicitly allowed', async () => {
+  const { assertTokenEncryption } = await import('../services/tokenVault.js');
+  const saved = process.env.TOKEN_ENCRYPTION_KEY;
+  try {
+    delete process.env.TOKEN_ENCRYPTION_KEY;
+    assert.throws(() => assertTokenEncryption('production', undefined), { code: 'TOKEN_KEY_REQUIRED' });
+    assert.doesNotThrow(() => assertTokenEncryption('development', undefined));
+    assert.doesNotThrow(() => assertTokenEncryption('production', 'true'));
+    process.env.TOKEN_ENCRYPTION_KEY = 'a'.repeat(64);
+    assert.doesNotThrow(() => assertTokenEncryption('production', undefined));
+  } finally {
+    if (saved === undefined) delete process.env.TOKEN_ENCRYPTION_KEY; else process.env.TOKEN_ENCRYPTION_KEY = saved;
+  }
+});

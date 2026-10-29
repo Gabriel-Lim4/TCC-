@@ -21,6 +21,16 @@ function readKey() {
 
 export const tokenEncryptionEnabled = () => Boolean(readKey());
 
+// Em produção o servidor só sobe com a chave definida; ALLOW_PLAINTEXT_TOKENS=true é a saída consciente para quem aceita o risco.
+export function assertTokenEncryption(nodeEnv = process.env.NODE_ENV, allowPlaintext = process.env.ALLOW_PLAINTEXT_TOKENS) {
+  if (nodeEnv !== 'production' || tokenEncryptionEnabled()) return;
+  if (String(allowPlaintext).toLowerCase() === 'true') {
+    console.warn('[SERVER] ⚠️  Tokens das contas de anúncio em texto puro (ALLOW_PLAINTEXT_TOKENS=true). Defina TOKEN_ENCRYPTION_KEY.');
+    return;
+  }
+  throw fail('TOKEN_KEY_REQUIRED', 'TOKEN_ENCRYPTION_KEY é obrigatória em produção. Defina a chave (32 bytes em base64 ou 64 hex) ou, por sua conta e risco, ALLOW_PLAINTEXT_TOKENS=true.');
+}
+
 export function sealToken(value) {
   if (!value || isSealed(value)) return value;
   const key = readKey();
