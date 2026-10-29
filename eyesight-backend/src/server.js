@@ -5,6 +5,7 @@
 import env            from './config/env.js';
 import express        from 'express';
 import cors           from 'cors';
+import { corsOptions } from './config/cors.js';
 import helmet         from 'helmet';
 import { testConnection } from './config/database.js';
 import { health } from './controllers/healthController.js';
@@ -18,7 +19,7 @@ import jobsRoutes     from './routes/jobsRoutes.js';
 import resumoRoutes   from './routes/resumoRoutes.js';
 import instagramRoutes from './routes/instagramRoutes.js';
 import { mountFront } from './staticFront.js';
-import { tokenEncryptionEnabled } from './services/tokenVault.js';
+import { assertTokenEncryption } from './services/tokenVault.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,7 +28,7 @@ const app = express();
 // never arbitrary client-supplied forwarding chains. Local deployments remain direct.
 if (process.env.RENDER === 'true') app.set('trust proxy', 1);
 
-app.use(cors());
+app.use(cors(corsOptions()));
 // Pasta do site compilado (frontend/dist). Em produção o mesmo serviço entrega site e API.
 const FRONT_DIR = process.env.FRONT_DIST || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../frontend/dist');
 // CSP do site: fontes do Google, estilos inline do React e animações Lottie (blob/data). Tudo o mais só do próprio domínio.
@@ -69,8 +70,7 @@ app.use(errorHandler);
 
 async function start() {
   await testConnection();
-  if (env.app.nodeEnv === 'production' && !tokenEncryptionEnabled())
-    console.warn('[SERVER] ⚠️  TOKEN_ENCRYPTION_KEY não definida: os tokens das contas de anúncio estão sendo salvos em texto puro. Defina a chave no ambiente.');
+  assertTokenEncryption(env.app.nodeEnv);
   app.listen(env.app.port, () => {
     console.log(`\n[SERVER] ✅ Rodando em http://localhost:${env.app.port} [${env.app.nodeEnv}]`);
     console.log('[SERVER]    POST   /auth/cadastro');
