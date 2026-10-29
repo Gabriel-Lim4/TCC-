@@ -55,7 +55,7 @@ model campanhas {
   metricas        metricas[]
   daily_metrics   campaign_daily_metrics[]
 
-  @@unique([fk_id_conta, id_externo])
+  @@unique([fk_id_conta, id_externo], map: "campanhas_conta_id_externo_key")
   @@index([fk_id_conta])
 }
 
@@ -129,7 +129,7 @@ model planos_acao {
   updated_at  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
   user        usuarios @relation(fields: [user_id], references: [pk_id_usuario], onDelete: Cascade)
 
-  @@unique([user_id, action_key])
+  @@unique([user_id, action_key], map: "planos_acao_user_action_key")
   @@index([user_id, last_seen_at])
 }
 
@@ -141,5 +141,5 @@ model rotina_envios {
   sent_at    DateTime @default(now()) @db.Timestamptz(6)
   user       usuarios @relation(fields: [user_id], references: [pk_id_usuario], onDelete: Cascade)
 
-  @@unique([user_id, kind, period_key])
+  @@unique([user_id, kind, period_key], map: "rotina_envios_user_kind_period_key")
 }
