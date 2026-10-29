@@ -1,13 +1,19 @@
-name: CI
+name: Backend CI
 
 on:
   push:
     branches: [main]
+    paths: ['eyesight-backend/**', '.github/workflows/backend-ci.yml']
   pull_request:
+    paths: ['eyesight-backend/**', '.github/workflows/backend-ci.yml']
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: eyesight-backend
 
 jobs:
   test:
@@ -18,6 +24,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: eyesight-backend/package-lock.json
       - run: npm ci
       # O schema usa env(): valores falsos bastam para validar e gerar o client.
       - name: Validar schema do Prisma
@@ -50,6 +57,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: eyesight-backend/package-lock.json
       - run: npm ci
       - name: Aplicar as migrações num banco vazio
         run: npx prisma migrate deploy
